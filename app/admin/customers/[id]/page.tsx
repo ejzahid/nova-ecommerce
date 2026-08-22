@@ -72,6 +72,7 @@ export default function CustomerDetailsPage() {
         setError("");
 
         const response = await fetch(`/api/customers/${customerId}`);
+
         const result = await response.json();
 
         if (!response.ok || !result.success) {
@@ -83,6 +84,7 @@ export default function CustomerDetailsPage() {
         const data = result.customer as Customer;
 
         setCustomer(data);
+
         setName(data.name);
         setPhone(data.phone);
         setAddress(data.address || "");
@@ -104,6 +106,19 @@ export default function CustomerDetailsPage() {
   }, [customerId]);
 
   async function handleSave() {
+    const cleanName = name.trim();
+    const cleanPhone = phone.trim();
+
+    if (!cleanName) {
+      setError("Customer name is required.");
+      return;
+    }
+
+    if (!cleanPhone) {
+      setError("Customer phone is required.");
+      return;
+    }
+
     try {
       setSaving(true);
       setError("");
@@ -115,10 +130,10 @@ export default function CustomerDetailsPage() {
         },
         body: JSON.stringify({
           id: Number(customerId),
-          name,
-          phone,
-          address,
-          email,
+          name: cleanName,
+          phone: cleanPhone,
+          address: address.trim(),
+          email: email.trim(),
         }),
       });
 
@@ -132,17 +147,20 @@ export default function CustomerDetailsPage() {
 
       const updated = result.customer;
 
-      setCustomer((current) =>
-        current
-          ? {
-              ...current,
-              name: updated.name,
-              phone: updated.phone,
-              address: updated.address,
-              email: updated.email,
-            }
-          : current
-      );
+      setCustomer((current) => {
+        if (!current) {
+          return current;
+        }
+
+        return {
+          ...current,
+          name: updated.name,
+          phone: updated.phone,
+          address: updated.address,
+          email: updated.email,
+          updatedAt: updated.updatedAt,
+        };
+      });
 
       setName(updated.name);
       setPhone(updated.phone);
@@ -219,7 +237,7 @@ export default function CustomerDetailsPage() {
           ? err.message
           : "Failed to delete customer"
       );
-    } finally {
+
       setDeleting(false);
     }
   }
@@ -236,22 +254,24 @@ export default function CustomerDetailsPage() {
     );
   }
 
-  if (error && !customer) {
+  if (!customer) {
     return (
       <main className="min-h-screen bg-slate-100 text-slate-950">
         <div className="mx-auto max-w-3xl px-6 py-16">
           <div className="rounded-2xl border border-red-200 bg-white p-8 text-center shadow-sm">
             <h1 className="text-2xl font-black">
-              Unable to load customer
+              Customer not found
             </h1>
 
-            <p className="mt-3 text-sm text-red-600">
-              {error}
-            </p>
+            {error && (
+              <p className="mt-3 text-sm font-semibold text-red-600">
+                {error}
+              </p>
+            )}
 
             <Link
               href="/admin/customers"
-              className="mt-6 inline-flex rounded-xl bg-slate-950 px-5 py-3 text-sm font-bold text-white"
+              className="mt-6 inline-flex rounded-xl bg-slate-950 px-5 py-3 text-sm font-bold text-white transition hover:bg-slate-800"
             >
               Back to Customers
             </Link>
@@ -259,10 +279,6 @@ export default function CustomerDetailsPage() {
         </div>
       </main>
     );
-  }
-
-  if (!customer) {
-    return null;
   }
 
   return (
@@ -372,19 +388,15 @@ export default function CustomerDetailsPage() {
         </div>
 
         <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-            <div>
-              <h3 className="text-xl font-black">
-                Customer Information
-              </h3>
+          <h3 className="text-xl font-black">
+            Customer Information
+          </h3>
 
-              <p className="mt-1 text-sm text-slate-500">
-                {editing
-                  ? "Update the customer's information below."
-                  : "Customer contact information."}
-              </p>
-            </div>
-          </div>
+          <p className="mt-1 text-sm text-slate-500">
+            {editing
+              ? "Update the customer's information below."
+              : "Customer contact information."}
+          </p>
 
           {editing ? (
             <div className="mt-6 grid gap-5 md:grid-cols-2">
@@ -396,8 +408,11 @@ export default function CustomerDetailsPage() {
                 <input
                   type="text"
                   value={name}
-                  onChange={(event) => setName(event.target.value)}
-                  className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-slate-950"
+                  onChange={(event) =>
+                    setName(event.target.value)
+                  }
+                  disabled={saving}
+                  className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-slate-950 disabled:bg-slate-100"
                 />
               </div>
 
@@ -409,8 +424,11 @@ export default function CustomerDetailsPage() {
                 <input
                   type="text"
                   value={phone}
-                  onChange={(event) => setPhone(event.target.value)}
-                  className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-slate-950"
+                  onChange={(event) =>
+                    setPhone(event.target.value)
+                  }
+                  disabled={saving}
+                  className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-slate-950 disabled:bg-slate-100"
                 />
               </div>
 
@@ -422,8 +440,11 @@ export default function CustomerDetailsPage() {
                 <input
                   type="email"
                   value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-slate-950"
+                  onChange={(event) =>
+                    setEmail(event.target.value)
+                  }
+                  disabled={saving}
+                  className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-slate-950 disabled:bg-slate-100"
                 />
               </div>
 
@@ -435,8 +456,11 @@ export default function CustomerDetailsPage() {
                 <input
                   type="text"
                   value={address}
-                  onChange={(event) => setAddress(event.target.value)}
-                  className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-slate-950"
+                  onChange={(event) =>
+                    setAddress(event.target.value)
+                  }
+                  disabled={saving}
+                  className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-slate-950 disabled:bg-slate-100"
                 />
               </div>
 
@@ -569,9 +593,9 @@ export default function CustomerDetailsPage() {
                       </td>
 
                       <td className="px-6 py-5 text-sm text-slate-500">
-                        {new Date(sale.createdAt).toLocaleDateString(
-                          "en-BD"
-                        )}
+                        {new Date(
+                          sale.createdAt
+                        ).toLocaleDateString("en-BD")}
                       </td>
 
                       <td className="px-6 py-5">
