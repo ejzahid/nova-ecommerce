@@ -1,12 +1,24 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 
+const ALLOWED_PAYMENT_METHODS = [
+  "COD",
+  "CASH",
+  "BKASH",
+  "NAGAD",
+  "CARD",
+] as const;
+
 export async function GET() {
   try {
     const sales = await prisma.sale.findMany({
       include: {
         customer: true,
-        items: true,
+        items: {
+          include: {
+            product: true,
+          },
+        },
       },
       orderBy: {
         createdAt: "desc",
@@ -63,8 +75,13 @@ export async function POST(request: Request) {
         : String(body.note).trim();
 
     const discount = Number(body.discount ?? 0);
-    const deliveryFee = Number(body.deliveryFee ?? 0);
+    const deliveryFee = Number(
+      body.deliveryFee ?? 0
+    );
 
+    /*
+     * BASIC CUSTOMER VALIDATION
+     */
     if (!customerName) {
       return NextResponse.json(
         {
@@ -85,6 +102,27 @@ export async function POST(request: Request) {
       );
     }
 
+    /*
+     * PAYMENT METHOD VALIDATION
+     */
+    if (
+      !ALLOWED_PAYMENT_METHODS.includes(
+        paymentMethod as
+          (typeof ALLOWED_PAYMENT_METHODS)[number]
+      )
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Invalid payment method",
+        },
+        { status: 400 }
+      );
+    }
+
+    /*
+     * ITEMS VALIDATION
+     */
     if (
       !Array.isArray(body.items) ||
       body.items.length === 0
@@ -98,7 +136,13 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!Number.isFinite(discount) || discount < 0) {
+    /*
+     * DISCOUNT VALIDATION
+     */
+    if (
+      !Number.isFinite(discount) ||
+      discount < 0
+    ) {
       return NextResponse.json(
         {
           success: false,
@@ -108,6 +152,9 @@ export async function POST(request: Request) {
       );
     }
 
+    /*
+     * DELIVERY FEE VALIDATION
+     */
     if (
       !Number.isFinite(deliveryFee) ||
       deliveryFee < 0
@@ -165,7 +212,7 @@ export async function POST(request: Request) {
     /*
      * PREVENT DUPLICATE PRODUCTS
      *
-     * The same product must not appear more than once
+     * Same product cannot appear more than once
      * in a single sale.
      */
     const productIdSet = new Set<number>();
@@ -185,57 +232,71 @@ export async function POST(request: Request) {
       productIdSet.add(item.productId);
     }
 
-    const productIds = Array.from(
-      productIdSet
-    );
+    const productIds = Array.from(productIdSet);
 
+    /*
+     * CREATE SALE + CUSTOMER + STOCK UPDATE
+     *
+     * Everything happens inside one transaction.
+     *
+     * If anything fails, the complete transaction
+     * is rolled back.
+     */
     const sale = await prisma.$transaction(
       async (tx) => {
         /*
          * CUSTOMER
          *
-         * Phone is the unique identifier.
-         * Name and address are intentionally saved
-         * using the values entered for this sale.
+         * Phone is used as the customer identifier.
+         *
+         * Name and address are saved using the values
+         * entered for THIS sale.
          */
-        let customer = await tx.customer.findUnique({
-          where: {
-            phone: customerPhone,
-          },
-        });
+        let customer =
+          await tx.customer.findUnique({
+            where: {
+              phone: customerPhone,
+            },
+          });
 
         if (customer) {
-          customer = await tx.customer.update({
-            where: {
-              id: customer.id,
-            },
-            data: {
-              name: customerName,
-              address: customerAddress,
-            },
-          });
+          customer =
+            await tx.customer.update({
+              where: {
+                id: customer.id,
+              },
+              data: {
+                name: customerName,
+                address: customerAddress,
+              },
+            });
         } else {
-          customer = await tx.customer.create({
-            data: {
-              name: customerName,
-              phone: customerPhone,
-              address: customerAddress,
-            },
-          });
+          customer =
+            await tx.customer.create({
+              data: {
+                name: customerName,
+                phone: customerPhone,
+                address: customerAddress,
+              },
+            });
         }
 
         /*
          * LOAD PRODUCTS
          */
-        const products = await tx.product.findMany({
-          where: {
-            id: {
-              in: productIds,
+        const products =
+          await tx.product.findMany({
+            where: {
+              id: {
+                in: productIds,
+              },
             },
-          },
-        });
+          });
 
-        if (products.length !== productIds.length) {
+        if (
+          products.length !==
+          productIds.length
+        ) {
           throw new Error(
             "One or more products were not found"
           );
@@ -246,12 +307,20 @@ export async function POST(request: Request) {
          */
         let subtotal = 0;
 
-        const saleItems = [];
+        const saleItems: Array<{
+          productId: number;
+          productName: string;
+          sku: string | null;
+          quantity: number;
+          unitPrice: number;
+          total: number;
+        }> = [];
 
         for (const item of rawItems) {
           const product = products.find(
             (productItem) =>
-              productItem.id === item.productId
+              productItem.id ===
+              item.productId
           );
 
           if (!product) {
@@ -263,12 +332,18 @@ export async function POST(request: Request) {
           /*
            * STOCK VALIDATION
            */
-          if (item.quantity > product.stock) {
+          if (
+            item.quantity >
+            product.stock
+          ) {
             throw new Error(
               `${product.name} has only ${product.stock} item(s) in stock`
             );
           }
 
+          /*
+           * PRICE VALIDATION
+           */
           const unitPrice = Number(
             product.price
           );
@@ -285,6 +360,14 @@ export async function POST(request: Request) {
           const itemTotal =
             unitPrice * item.quantity;
 
+          if (
+            !Number.isFinite(itemTotal)
+          ) {
+            throw new Error(
+              `Invalid total for ${product.name}`
+            );
+          }
+
           subtotal += itemTotal;
 
           saleItems.push({
@@ -295,6 +378,18 @@ export async function POST(request: Request) {
             unitPrice,
             total: itemTotal,
           });
+        }
+
+        /*
+         * FINAL SUBTOTAL VALIDATION
+         */
+        if (
+          !Number.isFinite(subtotal) ||
+          subtotal < 0
+        ) {
+          throw new Error(
+            "Invalid sale subtotal"
+          );
         }
 
         /*
@@ -314,42 +409,64 @@ export async function POST(request: Request) {
           discount +
           deliveryFee;
 
+        if (
+          !Number.isFinite(total) ||
+          total < 0
+        ) {
+          throw new Error(
+            "Invalid sale total"
+          );
+        }
+
         /*
          * CREATE SALE
+         *
+         * New sales start with PENDING payment.
+         * Admin can mark payment as PAID later.
          */
         const createdSale =
           await tx.sale.create({
             data: {
               customerId: customer.id,
+
               customerName,
               customerPhone,
               customerAddress,
+
               subtotal,
               discount,
               deliveryFee,
               total,
+
               paymentMethod,
-              paymentStatus:
-                paymentMethod === "COD"
-                  ? "PENDING"
-                  : "PAID",
+
+              paymentStatus: "PENDING",
+
               orderStatus: "PENDING",
+
               note,
+
               items: {
                 create: saleItems,
               },
             },
+
             include: {
               customer: true,
-              items: true,
+              items: {
+                include: {
+                  product: true,
+                },
+              },
             },
           });
 
         /*
          * DECREASE STOCK SAFELY
          *
-         * This prevents stock from becoming negative
-         * if stock changes while the sale is being created.
+         * updateMany + stock >= quantity prevents
+         * stock from becoming negative if another
+         * transaction changes the stock.
          */
         for (const item of saleItems) {
           const updatedProduct =
@@ -367,7 +484,9 @@ export async function POST(request: Request) {
               },
             });
 
-          if (updatedProduct.count !== 1) {
+          if (
+            updatedProduct.count !== 1
+          ) {
             throw new Error(
               "Stock changed while creating the sale. Please try again."
             );
@@ -397,11 +516,19 @@ export async function POST(request: Request) {
         : "Failed to create sale";
 
     const validationErrors = [
+      "Customer name is required",
+      "Customer phone is required",
+      "Invalid payment method",
+      "At least one product is required",
+      "Invalid discount",
+      "Invalid delivery fee",
       "Invalid product ID",
       "Invalid product quantity",
       "The same product cannot be added more than once. Please change the quantity instead.",
       "One or more products were not found",
       "Discount cannot be greater than subtotal",
+      "Invalid sale subtotal",
+      "Invalid sale total",
     ];
 
     const isValidationError =
@@ -415,7 +542,9 @@ export async function POST(request: Request) {
         error: message,
       },
       {
-        status: isValidationError ? 400 : 500,
+        status: isValidationError
+          ? 400
+          : 500,
       }
     );
   }
