@@ -7,6 +7,21 @@ type RouteContext = {
   }>;
 };
 
+const ALLOWED_ORDER_STATUSES = [
+  "PENDING",
+  "PROCESSING",
+  "SHIPPED",
+  "DELIVERED",
+  "CANCELLED",
+];
+
+const ALLOWED_PAYMENT_STATUSES = [
+  "PENDING",
+  "PAID",
+  "FAILED",
+  "REFUNDED",
+];
+
 export async function GET(
   _request: Request,
   { params }: RouteContext
@@ -84,90 +99,182 @@ export async function PUT(
       );
     }
 
-    const existingSale = await prisma.sale.findUnique({
-      where: {
-        id: saleId,
-      },
-    });
-
-    if (!existingSale) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Sale not found",
-        },
-        { status: 404 }
-      );
-    }
-
     const body = await request.json();
 
-    const orderStatus =
-      typeof body.orderStatus === "string"
-        ? body.orderStatus.trim().toUpperCase()
-        : existingSale.orderStatus;
+    const result = await prisma.$transaction(
+      async (tx) => {
+        const existingSale =
+          await tx.sale.findUnique({
+            where: {
+              id: saleId,
+            },
+            include: {
+              items: true,
+            },
+          });
 
-    const paymentStatus =
-      typeof body.paymentStatus === "string"
-        ? body.paymentStatus.trim().toUpperCase()
-        : existingSale.paymentStatus;
+        if (!existingSale) {
+          return {
+            error: "Sale not found",
+            status: 404,
+          };
+        }
 
-    const allowedOrderStatuses = [
-      "PENDING",
-      "PROCESSING",
-      "SHIPPED",
-      "DELIVERED",
-      "CANCELLED",
-    ];
+        const orderStatus =
+          typeof body.orderStatus === "string"
+            ? body.orderStatus
+                .trim()
+                .toUpperCase()
+            : existingSale.orderStatus;
 
-    const allowedPaymentStatuses = [
-      "PENDING",
-      "PAID",
-      "FAILED",
-      "REFUNDED",
-    ];
+        const paymentStatus =
+          typeof body.paymentStatus === "string"
+            ? body.paymentStatus
+                .trim()
+                .toUpperCase()
+            : existingSale.paymentStatus;
 
-    if (!allowedOrderStatuses.includes(orderStatus)) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Invalid order status",
-        },
-        { status: 400 }
-      );
-    }
+        if (
+          !ALLOWED_ORDER_STATUSES.includes(
+            orderStatus
+          )
+        ) {
+          return {
+            error: "Invalid order status",
+            status: 400,
+          };
+        }
 
-    if (!allowedPaymentStatuses.includes(paymentStatus)) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Invalid payment status",
-        },
-        { status: 400 }
-      );
-    }
+        if (
+          !ALLOWED_PAYMENT_STATUSES.includes(
+            paymentStatus
+          )
+        ) {
+          return {
+            error: "Invalid payment status",
+            status: 400,
+          };
+        }
 
-    const sale = await prisma.sale.update({
-      where: {
-        id: saleId,
-      },
-      data: {
-        orderStatus,
-        paymentStatus,
-      },
-      include: {
-        customer: true,
-        items: {
-          include: {
-            product: true,
+        const wasCancelled =
+          existingSale.orderStatus ===
+          "CANCELLED";
+
+        const willBeCancelled =
+          orderStatus === "CANCELLED";
+
+        /*
+         * CANCEL SALE
+         *
+         * When a normal sale becomes CANCELLED,
+         * return all sold quantities to stock.
+         */
+        if (
+          !wasCancelled &&
+          willBeCancelled
+        ) {
+          for (const item of existingSale.items) {
+            await tx.product.update({
+              where: {
+                id: item.productId,
+              },
+              data: {
+                stock: {
+                  increment: item.quantity,
+                },
+              },
+            });
+          }
+        }
+
+        /*
+         * REACTIVATE CANCELLED SALE
+         *
+         * If a cancelled sale is changed back to an
+         * active status, deduct its quantities again.
+         *
+         * updateMany + stock >= quantity makes this
+         * safe if current stock is insufficient.
+         */
+        if (
+          wasCancelled &&
+          !willBeCancelled
+        ) {
+          for (const item of existingSale.items) {
+            const updatedProduct =
+              await tx.product.updateMany({
+                where: {
+                  id: item.productId,
+                  stock: {
+                    gte: item.quantity,
+                  },
+                },
+                data: {
+                  stock: {
+                    decrement: item.quantity,
+                  },
+                },
+              });
+
+            if (updatedProduct.count !== 1) {
+              const product =
+                await tx.product.findUnique({
+                  where: {
+                    id: item.productId,
+                  },
+                  select: {
+                    name: true,
+                    stock: true,
+                  },
+                });
+
+              throw new Error(
+                product
+                  ? `Cannot reactivate sale. ${product.name} has only ${product.stock} item(s) in stock, but ${item.quantity} required.`
+                  : `Cannot reactivate sale. Product #${item.productId} was not found.`
+              );
+            }
+          }
+        }
+
+        const sale = await tx.sale.update({
+          where: {
+            id: saleId,
           },
+          data: {
+            orderStatus,
+            paymentStatus,
+          },
+          include: {
+            customer: true,
+            items: {
+              include: {
+                product: true,
+              },
+            },
+          },
+        });
+
+        return {
+          sale,
+          status: 200,
+        };
+      }
+    );
+
+    if ("error" in result) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: result.error,
         },
-      },
-    });
+        { status: result.status }
+      );
+    }
 
     return NextResponse.json({
       success: true,
-      sale,
+      sale: result.sale,
     });
   } catch (error) {
     console.error("Sale PUT error:", error);
@@ -175,9 +282,14 @@ export async function PUT(
     return NextResponse.json(
       {
         success: false,
-        error: "Failed to update sale",
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to update sale",
       },
-      { status: 500 }
+      {
+        status: 500,
+      }
     );
   }
 }
