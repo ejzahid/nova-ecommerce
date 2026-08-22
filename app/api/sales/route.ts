@@ -62,8 +62,8 @@ export async function POST(request: Request) {
         ? null
         : String(body.note).trim();
 
-    const discount = Number(body.discount || 0);
-    const deliveryFee = Number(body.deliveryFee || 0);
+    const discount = Number(body.discount ?? 0);
+    const deliveryFee = Number(body.deliveryFee ?? 0);
 
     if (!customerName) {
       return NextResponse.json(
@@ -121,221 +121,262 @@ export async function POST(request: Request) {
       );
     }
 
-    const sale = await prisma.$transaction(async (tx) => {
-      /*
-       * CUSTOMER
-       *
-       * Phone is the unique identifier.
-       * Name and address are intentionally updated with
-       * the values entered for this sale.
-       */
-      let customer = await tx.customer.findUnique({
-        where: {
-          phone: customerPhone,
-        },
-      });
+    /*
+     * VALIDATE RAW SALE ITEMS
+     */
+    const rawItems = body.items.map(
+      (item: {
+        productId: number | string;
+        quantity: number | string;
+      }) => ({
+        productId: Number(item.productId),
+        quantity: Number(item.quantity),
+      })
+    );
 
-      if (customer) {
-        customer = await tx.customer.update({
+    for (const item of rawItems) {
+      if (
+        !Number.isInteger(item.productId) ||
+        item.productId <= 0
+      ) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Invalid product ID",
+          },
+          { status: 400 }
+        );
+      }
+
+      if (
+        !Number.isInteger(item.quantity) ||
+        item.quantity <= 0
+      ) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Invalid product quantity",
+          },
+          { status: 400 }
+        );
+      }
+    }
+
+    /*
+     * PREVENT DUPLICATE PRODUCTS
+     *
+     * The same product must not appear more than once
+     * in a single sale.
+     */
+    const productIdSet = new Set<number>();
+
+    for (const item of rawItems) {
+      if (productIdSet.has(item.productId)) {
+        return NextResponse.json(
+          {
+            success: false,
+            error:
+              "The same product cannot be added more than once. Please change the quantity instead.",
+          },
+          { status: 400 }
+        );
+      }
+
+      productIdSet.add(item.productId);
+    }
+
+    const productIds = Array.from(
+      productIdSet
+    );
+
+    const sale = await prisma.$transaction(
+      async (tx) => {
+        /*
+         * CUSTOMER
+         *
+         * Phone is the unique identifier.
+         * Name and address are intentionally saved
+         * using the values entered for this sale.
+         */
+        let customer = await tx.customer.findUnique({
           where: {
-            id: customer.id,
-          },
-          data: {
-            name: customerName,
-            address: customerAddress,
-          },
-        });
-      } else {
-        customer = await tx.customer.create({
-          data: {
-            name: customerName,
             phone: customerPhone,
-            address: customerAddress,
-          },
-        });
-      }
-
-      /*
-       * VALIDATE SALE ITEMS
-       */
-      const rawItems = body.items.map(
-        (item: {
-          productId: number | string;
-          quantity: number | string;
-        }) => ({
-          productId: Number(item.productId),
-          quantity: Number(item.quantity),
-        })
-      );
-
-      for (const item of rawItems) {
-        if (
-          !Number.isInteger(item.productId) ||
-          item.productId <= 0
-        ) {
-          throw new Error(
-            "Invalid product ID"
-          );
-        }
-
-        if (
-          !Number.isInteger(item.quantity) ||
-          item.quantity <= 0
-        ) {
-          throw new Error(
-            "Invalid product quantity"
-          );
-        }
-      }
-
-      /*
-       * COMBINE DUPLICATE PRODUCTS
-       *
-       * If the same product is selected twice,
-       * quantities are combined safely.
-       */
-      const quantityMap = new Map<
-        number,
-        number
-      >();
-
-      for (const item of rawItems) {
-        quantityMap.set(
-          item.productId,
-          (quantityMap.get(item.productId) || 0) +
-            item.quantity
-        );
-      }
-
-      const productIds = Array.from(
-        quantityMap.keys()
-      );
-
-      const products = await tx.product.findMany({
-        where: {
-          id: {
-            in: productIds,
-          },
-        },
-      });
-
-      if (products.length !== productIds.length) {
-        throw new Error(
-          "One or more products were not found"
-        );
-      }
-
-      /*
-       * CALCULATE SALE
-       */
-      let subtotal = 0;
-
-      const saleItems = [];
-
-      for (const productId of productIds) {
-        const product = products.find(
-          (itemProduct) =>
-            itemProduct.id === productId
-        );
-
-        if (!product) {
-          throw new Error(
-            "Product not found"
-          );
-        }
-
-        const quantity =
-          quantityMap.get(productId) || 0;
-
-        if (product.stock < quantity) {
-          throw new Error(
-            `${product.name} has only ${product.stock} item(s) in stock`
-          );
-        }
-
-        const unitPrice = Number(
-          product.price
-        );
-
-        const itemTotal =
-          unitPrice * quantity;
-
-        subtotal += itemTotal;
-
-        saleItems.push({
-          productId: product.id,
-          productName: product.name,
-          sku: product.sku,
-          quantity,
-          unitPrice,
-          total: itemTotal,
-        });
-      }
-
-      const total = Math.max(
-        0,
-        subtotal - discount + deliveryFee
-      );
-
-      /*
-       * CREATE SALE
-       */
-      const createdSale =
-        await tx.sale.create({
-          data: {
-            customerId: customer.id,
-            customerName,
-            customerPhone,
-            customerAddress,
-            subtotal,
-            discount,
-            deliveryFee,
-            total,
-            paymentMethod,
-            paymentStatus:
-              paymentMethod === "COD"
-                ? "PENDING"
-                : "PAID",
-            orderStatus: "PENDING",
-            note,
-            items: {
-              create: saleItems,
-            },
-          },
-          include: {
-            customer: true,
-            items: true,
           },
         });
 
-      /*
-       * DECREASE STOCK
-       */
-      for (const item of saleItems) {
-        const updatedProduct =
-          await tx.product.updateMany({
+        if (customer) {
+          customer = await tx.customer.update({
             where: {
-              id: item.productId,
-              stock: {
-                gte: item.quantity,
-              },
+              id: customer.id,
             },
             data: {
-              stock: {
-                decrement: item.quantity,
+              name: customerName,
+              address: customerAddress,
+            },
+          });
+        } else {
+          customer = await tx.customer.create({
+            data: {
+              name: customerName,
+              phone: customerPhone,
+              address: customerAddress,
+            },
+          });
+        }
+
+        /*
+         * LOAD PRODUCTS
+         */
+        const products = await tx.product.findMany({
+          where: {
+            id: {
+              in: productIds,
+            },
+          },
+        });
+
+        if (products.length !== productIds.length) {
+          throw new Error(
+            "One or more products were not found"
+          );
+        }
+
+        /*
+         * CALCULATE SUBTOTAL
+         */
+        let subtotal = 0;
+
+        const saleItems = [];
+
+        for (const item of rawItems) {
+          const product = products.find(
+            (productItem) =>
+              productItem.id === item.productId
+          );
+
+          if (!product) {
+            throw new Error(
+              "One or more products were not found"
+            );
+          }
+
+          /*
+           * STOCK VALIDATION
+           */
+          if (item.quantity > product.stock) {
+            throw new Error(
+              `${product.name} has only ${product.stock} item(s) in stock`
+            );
+          }
+
+          const unitPrice = Number(
+            product.price
+          );
+
+          if (
+            !Number.isFinite(unitPrice) ||
+            unitPrice < 0
+          ) {
+            throw new Error(
+              `Invalid price for ${product.name}`
+            );
+          }
+
+          const itemTotal =
+            unitPrice * item.quantity;
+
+          subtotal += itemTotal;
+
+          saleItems.push({
+            productId: product.id,
+            productName: product.name,
+            sku: product.sku,
+            quantity: item.quantity,
+            unitPrice,
+            total: itemTotal,
+          });
+        }
+
+        /*
+         * DISCOUNT VALIDATION
+         */
+        if (discount > subtotal) {
+          throw new Error(
+            "Discount cannot be greater than subtotal"
+          );
+        }
+
+        /*
+         * FINAL TOTAL
+         */
+        const total =
+          subtotal -
+          discount +
+          deliveryFee;
+
+        /*
+         * CREATE SALE
+         */
+        const createdSale =
+          await tx.sale.create({
+            data: {
+              customerId: customer.id,
+              customerName,
+              customerPhone,
+              customerAddress,
+              subtotal,
+              discount,
+              deliveryFee,
+              total,
+              paymentMethod,
+              paymentStatus:
+                paymentMethod === "COD"
+                  ? "PENDING"
+                  : "PAID",
+              orderStatus: "PENDING",
+              note,
+              items: {
+                create: saleItems,
               },
+            },
+            include: {
+              customer: true,
+              items: true,
             },
           });
 
-        if (updatedProduct.count !== 1) {
-          throw new Error(
-            "Stock changed while creating the sale. Please try again."
-          );
-        }
-      }
+        /*
+         * DECREASE STOCK SAFELY
+         *
+         * This prevents stock from becoming negative
+         * if stock changes while the sale is being created.
+         */
+        for (const item of saleItems) {
+          const updatedProduct =
+            await tx.product.updateMany({
+              where: {
+                id: item.productId,
+                stock: {
+                  gte: item.quantity,
+                },
+              },
+              data: {
+                stock: {
+                  decrement: item.quantity,
+                },
+              },
+            });
 
-      return createdSale;
-    });
+          if (updatedProduct.count !== 1) {
+            throw new Error(
+              "Stock changed while creating the sale. Please try again."
+            );
+          }
+        }
+
+        return createdSale;
+      }
+    );
 
     return NextResponse.json(
       {
@@ -350,15 +391,32 @@ export async function POST(request: Request) {
       error
     );
 
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Failed to create sale";
+
+    const validationErrors = [
+      "Invalid product ID",
+      "Invalid product quantity",
+      "The same product cannot be added more than once. Please change the quantity instead.",
+      "One or more products were not found",
+      "Discount cannot be greater than subtotal",
+    ];
+
+    const isValidationError =
+      validationErrors.includes(message) ||
+      message.includes("has only") ||
+      message.includes("Invalid price for");
+
     return NextResponse.json(
       {
         success: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : "Failed to create sale",
+        error: message,
       },
-      { status: 500 }
+      {
+        status: isValidationError ? 400 : 500,
+      }
     );
   }
 }
