@@ -13,6 +13,19 @@ type SaleItem = {
   total: number | string;
 };
 
+type ApiSaleItem = {
+  id: number;
+  productId: number;
+  quantity: number;
+  unitPrice: number | string;
+  total: number | string;
+  product: {
+    id: number;
+    name: string;
+    sku: string | null;
+  } | null;
+};
+
 type Sale = {
   id: number;
   customerName: string;
@@ -30,6 +43,25 @@ type Sale = {
   items: SaleItem[];
 };
 
+type ApiSale = Omit<Sale, "items"> & {
+  items: ApiSaleItem[];
+};
+
+function normalizeSale(sale: ApiSale): Sale {
+  return {
+    ...sale,
+    items: sale.items.map((item) => ({
+      id: item.id,
+      productName:
+        item.product?.name || "Product unavailable",
+      sku: item.product?.sku || null,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      total: item.total,
+    })),
+  };
+}
+
 export default function EditSalePage() {
   const params = useParams();
   const router = useRouter();
@@ -39,7 +71,8 @@ export default function EditSalePage() {
     : params.id;
 
   const [sale, setSale] = useState<Sale | null>(null);
-  const [orderStatus, setOrderStatus] = useState("PENDING");
+  const [orderStatus, setOrderStatus] =
+    useState("PENDING");
   const [paymentStatus, setPaymentStatus] =
     useState("PENDING");
 
@@ -69,15 +102,24 @@ export default function EditSalePage() {
           );
         }
 
-        setSale(result.sale);
-        setOrderStatus(
-          result.sale.orderStatus || "PENDING"
+        const normalizedSale = normalizeSale(
+          result.sale
         );
+
+        setSale(normalizedSale);
+
+        setOrderStatus(
+          normalizedSale.orderStatus || "PENDING"
+        );
+
         setPaymentStatus(
-          result.sale.paymentStatus || "PENDING"
+          normalizedSale.paymentStatus || "PENDING"
         );
       } catch (error) {
-        console.error("Sale loading error:", error);
+        console.error(
+          "Sale loading error:",
+          error
+        );
 
         setError(
           error instanceof Error
@@ -126,15 +168,27 @@ export default function EditSalePage() {
         );
       }
 
-      setSale(result.sale);
-      setSuccess("Sale updated successfully.");
+      const normalizedSale = normalizeSale(
+        result.sale
+      );
+
+      setSale(normalizedSale);
+
+      setSuccess(
+        "Sale updated successfully."
+      );
 
       setTimeout(() => {
-        router.push(`/admin/sales/${saleId}`);
+        router.push(
+          `/admin/sales/${saleId}`
+        );
         router.refresh();
       }, 500);
     } catch (error) {
-      console.error("Sale update error:", error);
+      console.error(
+        "Sale update error:",
+        error
+      );
 
       setError(
         error instanceof Error
@@ -172,7 +226,8 @@ export default function EditSalePage() {
             </h1>
 
             <p className="mt-2 text-sm text-red-700">
-              {error || "This sale does not exist."}
+              {error ||
+                "This sale does not exist."}
             </p>
 
             <Link
@@ -349,19 +404,15 @@ export default function EditSalePage() {
                   <option value="PENDING">
                     Pending
                   </option>
-
                   <option value="PROCESSING">
                     Processing
                   </option>
-
                   <option value="SHIPPED">
                     Shipped
                   </option>
-
                   <option value="DELIVERED">
                     Delivered
                   </option>
-
                   <option value="CANCELLED">
                     Cancelled
                   </option>
@@ -391,15 +442,12 @@ export default function EditSalePage() {
                   <option value="PENDING">
                     Pending
                   </option>
-
                   <option value="PAID">
                     Paid
                   </option>
-
                   <option value="FAILED">
                     Failed
                   </option>
-
                   <option value="REFUNDED">
                     Refunded
                   </option>
