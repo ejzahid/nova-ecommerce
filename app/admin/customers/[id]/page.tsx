@@ -113,7 +113,8 @@ export default async function CustomerDetailsPage({
             </p>
 
             <p className="mt-2 text-2xl font-black">
-              ৳{totalSpent.toLocaleString("en-BD", {
+              ৳
+              {totalSpent.toLocaleString("en-BD", {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2,
               })}
@@ -164,6 +165,16 @@ export default async function CustomerDetailsPage({
 
               <p className="mt-1 font-semibold">
                 {customer.address || "Not provided"}
+              </p>
+            </div>
+
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                Customer Since
+              </p>
+
+              <p className="mt-1 font-semibold">
+                {customer.createdAt.toLocaleDateString("en-BD")}
               </p>
             </div>
           </div>
@@ -221,7 +232,7 @@ export default async function CustomerDetailsPage({
                   {customer.sales.map((sale) => (
                     <tr
                       key={sale.id}
-                      className="border-b border-slate-100 last:border-0"
+                      className="border-b border-slate-100 last:border-0 hover:bg-slate-50"
                     >
                       <td className="px-6 py-5">
                         <Link
