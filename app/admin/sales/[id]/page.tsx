@@ -14,6 +14,19 @@ type SaleItem = {
   total: number | string;
 };
 
+type ApiSaleItem = {
+  id: number;
+  productId: number;
+  quantity: number;
+  unitPrice: number | string;
+  total: number | string;
+  product: {
+    id: number;
+    name: string;
+    sku: string | null;
+  } | null;
+};
+
 type Sale = {
   id: number;
   customerName: string;
@@ -31,6 +44,26 @@ type Sale = {
   updatedAt: string;
   items: SaleItem[];
 };
+
+type ApiSale = Omit<Sale, "items"> & {
+  items: ApiSaleItem[];
+};
+
+function normalizeSale(sale: ApiSale): Sale {
+  return {
+    ...sale,
+    items: sale.items.map((item) => ({
+      id: item.id,
+      productId: item.productId,
+      productName:
+        item.product?.name || "Product unavailable",
+      sku: item.product?.sku || null,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      total: item.total,
+    })),
+  };
+}
 
 export default function SaleDetailsPage() {
   const params = useParams();
@@ -74,14 +107,18 @@ export default function SaleDetailsPage() {
           );
         }
 
-        setSale(result.sale);
+        const normalizedSale = normalizeSale(
+          result.sale
+        );
+
+        setSale(normalizedSale);
 
         setOrderStatus(
-          result.sale.orderStatus || "PENDING"
+          normalizedSale.orderStatus || "PENDING"
         );
 
         setPaymentStatus(
-          result.sale.paymentStatus || "PENDING"
+          normalizedSale.paymentStatus || "PENDING"
         );
       } catch (error) {
         console.error(
@@ -132,14 +169,18 @@ export default function SaleDetailsPage() {
         );
       }
 
-      setSale(result.sale);
+      const normalizedSale = normalizeSale(
+        result.sale
+      );
+
+      setSale(normalizedSale);
 
       setOrderStatus(
-        result.sale.orderStatus
+        normalizedSale.orderStatus
       );
 
       setPaymentStatus(
-        result.sale.paymentStatus
+        normalizedSale.paymentStatus
       );
 
       setSuccess(
@@ -385,19 +426,15 @@ export default function SaleDetailsPage() {
                     <option value="PENDING">
                       Pending
                     </option>
-
                     <option value="PROCESSING">
                       Processing
                     </option>
-
                     <option value="SHIPPED">
                       Shipped
                     </option>
-
                     <option value="DELIVERED">
                       Delivered
                     </option>
-
                     <option value="CANCELLED">
                       Cancelled
                     </option>
@@ -421,15 +458,12 @@ export default function SaleDetailsPage() {
                     <option value="PENDING">
                       Pending
                     </option>
-
                     <option value="PAID">
                       Paid
                     </option>
-
                     <option value="FAILED">
                       Failed
                     </option>
-
                     <option value="REFUNDED">
                       Refunded
                     </option>
