@@ -1,6 +1,15 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 
+function slugify(value: string) {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
 export async function GET() {
   try {
     const categories = await prisma.category.findMany({
@@ -9,12 +18,29 @@ export async function GET() {
       },
       orderBy: [
         {
-          sortOrder: "asc",
-        },
-        {
           name: "asc",
         },
       ],
+      include: {
+        children: {
+          where: {
+            isActive: true,
+          },
+          orderBy: {
+            name: "asc",
+          },
+          include: {
+            children: {
+              where: {
+                isActive: true,
+              },
+              orderBy: {
+                name: "asc",
+              },
+            },
+          },
+        },
+      },
     });
 
     return NextResponse.json({
@@ -22,7 +48,7 @@ export async function GET() {
       categories,
     });
   } catch (error) {
-    console.error("GET /api/categories error:", error);
+    console.error("Categories GET error:", error);
 
     return NextResponse.json(
       {
@@ -41,22 +67,30 @@ export async function POST(request: Request) {
     const body = await request.json();
 
     const name =
-      typeof body.name === "string" ? body.name.trim() : "";
+      typeof body.name === "string"
+        ? body.name.trim()
+        : "";
 
     const subtitle =
-      typeof body.subtitle === "string"
-        ? body.subtitle.trim()
-        : null;
+      body.subtitle === undefined ||
+      body.subtitle === null ||
+      String(body.subtitle).trim() === ""
+        ? null
+        : String(body.subtitle).trim();
 
     const icon =
-      typeof body.icon === "string"
-        ? body.icon.trim()
-        : null;
+      body.icon === undefined ||
+      body.icon === null ||
+      String(body.icon).trim() === ""
+        ? null
+        : String(body.icon).trim();
 
-    const sortOrder =
-      Number.isFinite(Number(body.sortOrder))
-        ? Number(body.sortOrder)
-        : 0;
+    const parentId =
+      body.parentId === undefined ||
+      body.parentId === null ||
+      String(body.parentId).trim() === ""
+        ? null
+        : Number(body.parentId);
 
     if (!name) {
       return NextResponse.json(
@@ -70,32 +104,65 @@ export async function POST(request: Request) {
       );
     }
 
-    const slug = name
-      .toLowerCase()
-      .trim()
-      .replace(/&/g, "and")
-      .replace(/[^a-z0-9\s-]/g, "")
-      .replace(/\s+/g, "-")
-      .replace(/-+/g, "-");
+    if (
+      parentId !== null &&
+      (!Number.isInteger(parentId) || parentId <= 0)
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Invalid parent category",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
 
-    const existingCategory = await prisma.category.findFirst({
-      where: {
-        OR: [
+    /*
+     * Check parent category
+     */
+    if (parentId !== null) {
+      const parent = await prisma.category.findUnique({
+        where: {
+          id: parentId,
+        },
+      });
+
+      if (!parent) {
+        return NextResponse.json(
           {
-            name,
+            success: false,
+            error: "Parent category not found",
           },
           {
-            slug,
+            status: 404,
+          }
+        );
+      }
+    }
+
+    /*
+     * Prevent duplicate category name
+     * under the same parent.
+     */
+    const existingCategory =
+      await prisma.category.findFirst({
+        where: {
+          name: {
+            equals: name,
+            mode: "insensitive",
           },
-        ],
-      },
-    });
+          parentId,
+        },
+      });
 
     if (existingCategory) {
       return NextResponse.json(
         {
           success: false,
-          error: "Category already exists",
+          error:
+            "A category with this name already exists under the selected parent.",
         },
         {
           status: 409,
@@ -103,13 +170,54 @@ export async function POST(request: Request) {
       );
     }
 
+    /*
+     * Generate unique slug
+     */
+    const baseSlug = slugify(name);
+
+    if (!baseSlug) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Invalid category name",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    let slug = baseSlug;
+    let counter = 1;
+
+    while (
+      await prisma.category.findUnique({
+        where: {
+          slug,
+        },
+      })
+    ) {
+      counter += 1;
+      slug = `${baseSlug}-${counter}`;
+    }
+
+    /*
+     * Create category.
+     *
+     * sortOrder is intentionally not used for
+     * A-Z display. Frontend/API ordering uses name.
+     */
     const category = await prisma.category.create({
       data: {
         name,
         slug,
         subtitle,
         icon,
-        sortOrder,
+        parentId,
+        isActive: true,
+      },
+      include: {
+        children: true,
       },
     });
 
@@ -123,7 +231,7 @@ export async function POST(request: Request) {
       }
     );
   } catch (error) {
-    console.error("POST /api/categories error:", error);
+    console.error("Categories POST error:", error);
 
     return NextResponse.json(
       {
