@@ -42,7 +42,6 @@ export default function HomePage() {
   const [productsLoading, setProductsLoading] =
     useState(true);
 
-  const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
@@ -103,28 +102,6 @@ export default function HomePage() {
     loadProducts();
   }, []);
 
-  useEffect(() => {
-    if (!searchOpen) {
-      return;
-    }
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setSearchOpen(false);
-        setSearchQuery("");
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      window.removeEventListener(
-        "keydown",
-        handleKeyDown
-      );
-    };
-  }, [searchOpen]);
-
   const searchResults = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
 
@@ -153,10 +130,10 @@ export default function HomePage() {
           slug.includes(query)
         );
       })
-      .slice(0, 8);
+      .slice(0, 6);
   }, [products, searchQuery]);
 
-  const handleSearchSubmit = (
+  const handleSearch = (
     event: React.FormEvent<HTMLFormElement>
   ) => {
     event.preventDefault();
@@ -167,191 +144,13 @@ export default function HomePage() {
       return;
     }
 
-    if (searchResults.length > 0) {
-      window.location.href = `/products/${searchResults[0].slug}`;
-      return;
-    }
-
     window.location.href = `/shop?search=${encodeURIComponent(
       query
     )}`;
   };
 
-  const totalRevenue = 0;
-
   return (
     <main className="min-h-screen bg-[#f5f5f2] text-[#111111]">
-      {/* Search Overlay */}
-      {searchOpen && (
-        <div
-          className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-sm"
-          onMouseDown={() => {
-            setSearchOpen(false);
-            setSearchQuery("");
-          }}
-        >
-          <div
-            className="mx-auto mt-5 w-[calc(100%-24px)] max-w-3xl"
-            onMouseDown={(event) =>
-              event.stopPropagation()
-            }
-          >
-            <div className="overflow-hidden rounded-2xl border border-black/10 bg-white shadow-2xl">
-              <form
-                onSubmit={handleSearchSubmit}
-                className="flex items-center gap-3 border-b border-black/10 px-5 py-4"
-              >
-                <span className="text-xl text-neutral-400">
-                  ⌕
-                </span>
-
-                <input
-                  autoFocus
-                  type="search"
-                  value={searchQuery}
-                  onChange={(event) =>
-                    setSearchQuery(event.target.value)
-                  }
-                  placeholder="Search products..."
-                  className="min-w-0 flex-1 bg-transparent text-base font-medium outline-none placeholder:text-neutral-400"
-                />
-
-                {searchQuery && (
-                  <button
-                    type="button"
-                    onClick={() => setSearchQuery("")}
-                    className="flex h-8 w-8 items-center justify-center rounded-full text-neutral-400 hover:bg-neutral-100 hover:text-black"
-                    aria-label="Clear search"
-                  >
-                    ×
-                  </button>
-                )}
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSearchOpen(false);
-                    setSearchQuery("");
-                  }}
-                  className="rounded-lg bg-neutral-100 px-3 py-2 text-xs font-bold text-neutral-500 hover:bg-neutral-200 hover:text-black"
-                >
-                  ESC
-                </button>
-              </form>
-
-              {searchQuery.trim() && (
-                <div className="max-h-[70vh] overflow-y-auto">
-                  {productsLoading ? (
-                    <div className="px-5 py-8 text-center text-sm text-neutral-500">
-                      Searching products...
-                    </div>
-                  ) : searchResults.length === 0 ? (
-                    <div className="px-5 py-10 text-center">
-                      <div className="text-3xl">⌕</div>
-
-                      <p className="mt-3 font-semibold">
-                        No products found
-                      </p>
-
-                      <p className="mt-1 text-sm text-neutral-500">
-                        Try another product name or
-                        category.
-                      </p>
-
-                      <Link
-                        href={`/shop?search=${encodeURIComponent(
-                          searchQuery.trim()
-                        )}`}
-                        onClick={() => {
-                          setSearchOpen(false);
-                          setSearchQuery("");
-                        }}
-                        className="mt-5 inline-flex rounded-full bg-black px-5 py-2.5 text-sm font-semibold text-white"
-                      >
-                        Search in Shop →
-                      </Link>
-                    </div>
-                  ) : (
-                    <div className="divide-y divide-black/5">
-                      {searchResults.map((product) => (
-                        <Link
-                          key={product.id}
-                          href={`/products/${product.slug}`}
-                          onClick={() => {
-                            setSearchOpen(false);
-                            setSearchQuery("");
-                          }}
-                          className="flex items-center gap-4 px-5 py-4 transition hover:bg-neutral-50"
-                        >
-                          <div className="h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-[#f0f0ec]">
-                            {product.image ? (
-                              <img
-                                src={product.image}
-                                alt={product.name}
-                                className="h-full w-full object-cover"
-                              />
-                            ) : (
-                              <div className="flex h-full w-full items-center justify-center text-xl font-black">
-                                D
-                              </div>
-                            )}
-                          </div>
-
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate font-semibold">
-                              {product.name}
-                            </p>
-
-                            <p className="mt-1 text-xs text-neutral-400">
-                              {product.category?.name ||
-                                "General"}
-                            </p>
-                          </div>
-
-                          <div className="shrink-0 text-right">
-                            <p className="font-bold">
-                              ৳
-                              {Number(
-                                product.price
-                              ).toLocaleString(
-                                "en-BD"
-                              )}
-                            </p>
-
-                            {product.stock <= 0 && (
-                              <p className="mt-1 text-[10px] font-bold text-red-500">
-                                Out of Stock
-                              </p>
-                            )}
-                          </div>
-                        </Link>
-                      ))}
-                    </div>
-                  )}
-
-                  {searchResults.length > 0 && (
-                    <div className="border-t border-black/10 bg-neutral-50 px-5 py-3 text-center">
-                      <Link
-                        href={`/shop?search=${encodeURIComponent(
-                          searchQuery.trim()
-                        )}`}
-                        onClick={() => {
-                          setSearchOpen(false);
-                          setSearchQuery("");
-                        }}
-                        className="text-sm font-semibold underline underline-offset-4"
-                      >
-                        View all search results →
-                      </Link>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Announcement */}
       <div className="bg-black px-4 py-2 text-center text-[11px] font-medium tracking-[0.18em] text-white">
         FREE DELIVERY ON ORDERS OVER ৳2,000
@@ -359,16 +158,18 @@ export default function HomePage() {
 
       {/* Header */}
       <header className="sticky top-0 z-50 border-b border-black/10 bg-[#f5f5f2]/95 backdrop-blur">
-        <div className="mx-auto flex h-[76px] max-w-[1440px] items-center justify-between px-5 md:px-8">
+        <div className="mx-auto flex h-[76px] max-w-[1440px] items-center gap-6 px-5 md:px-8">
+          {/* Logo */}
           <Link
             href="/"
-            className="text-[28px] font-black tracking-[-0.08em]"
+            className="shrink-0 text-[28px] font-black tracking-[-0.08em]"
           >
             Digital Shop
             <span className="text-neutral-400">.</span>
           </Link>
 
-          <nav className="hidden items-center gap-8 md:flex">
+          {/* Navigation */}
+          <nav className="hidden shrink-0 items-center gap-7 lg:flex">
             <Link
               href="/"
               className="text-sm font-medium hover:opacity-50"
@@ -391,20 +192,143 @@ export default function HomePage() {
             </Link>
           </nav>
 
-          <div className="flex items-center gap-3">
-            {/* SEARCH BUTTON */}
-            <button
-              type="button"
-              aria-label="Search"
-              onClick={() => {
-                setSearchOpen(true);
-                setSearchQuery("");
-              }}
-              className="flex h-10 w-10 items-center justify-center rounded-full border border-black/10 bg-white text-lg transition hover:bg-black hover:text-white"
+          {/* Header Search */}
+          <div className="ml-auto flex min-w-0 flex-1 justify-end">
+            <form
+              onSubmit={handleSearch}
+              className="relative w-full max-w-[430px]"
             >
-              ⌕
-            </button>
+              <div className="flex h-11 items-center rounded-full border border-black/10 bg-white transition focus-within:border-black">
+                <span className="ml-4 shrink-0 text-lg text-neutral-400">
+                  ⌕
+                </span>
 
+                <input
+                  type="search"
+                  value={searchQuery}
+                  onChange={(event) =>
+                    setSearchQuery(event.target.value)
+                  }
+                  placeholder="Search products..."
+                  className="min-w-0 flex-1 bg-transparent px-3 text-sm outline-none placeholder:text-neutral-400"
+                />
+
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery("")}
+                    aria-label="Clear search"
+                    className="mr-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-neutral-400 transition hover:bg-neutral-100 hover:text-black"
+                  >
+                    ×
+                  </button>
+                )}
+
+                <button
+                  type="submit"
+                  className="mr-1 rounded-full bg-black px-4 py-2 text-xs font-bold text-white transition hover:bg-neutral-800"
+                >
+                  Search
+                </button>
+              </div>
+
+              {/* Search Suggestions */}
+              {searchQuery.trim() && (
+                <div className="absolute left-0 right-0 top-[calc(100%+8px)] overflow-hidden rounded-2xl border border-black/10 bg-white shadow-xl">
+                  {productsLoading ? (
+                    <div className="px-5 py-6 text-center text-sm text-neutral-500">
+                      Searching...
+                    </div>
+                  ) : searchResults.length === 0 ? (
+                    <div className="px-5 py-7 text-center">
+                      <p className="font-semibold">
+                        No products found
+                      </p>
+
+                      <p className="mt-1 text-xs text-neutral-400">
+                        Try another product name or category.
+                      </p>
+
+                      <button
+                        type="submit"
+                        className="mt-4 text-xs font-bold underline underline-offset-4"
+                      >
+                        Search in Shop →
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="max-h-[390px] overflow-y-auto">
+                        {searchResults.map((product) => (
+                          <Link
+                            key={product.id}
+                            href={`/products/${product.slug}`}
+                            onClick={() =>
+                              setSearchQuery("")
+                            }
+                            className="flex items-center gap-3 border-b border-black/5 px-4 py-3 transition last:border-b-0 hover:bg-neutral-50"
+                          >
+                            {/* Product Image */}
+                            <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-[#f0f0ec]">
+                              {product.image ? (
+                                <img
+                                  src={product.image}
+                                  alt={product.name}
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : (
+                                <div className="flex h-full w-full items-center justify-center text-lg font-black">
+                                  D
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Product Info */}
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-semibold">
+                                {product.name}
+                              </p>
+
+                              <p className="mt-0.5 truncate text-xs text-neutral-400">
+                                {product.category?.name ||
+                                  "General"}
+                              </p>
+                            </div>
+
+                            {/* Price */}
+                            <div className="shrink-0 text-right">
+                              <p className="text-sm font-bold">
+                                ৳
+                                {Number(
+                                  product.price
+                                ).toLocaleString("en-BD")}
+                              </p>
+
+                              {product.stock <= 0 && (
+                                <p className="mt-0.5 text-[9px] font-bold text-red-500">
+                                  OUT OF STOCK
+                                </p>
+                              )}
+                            </div>
+                          </Link>
+                        ))}
+                      </div>
+
+                      <button
+                        type="submit"
+                        className="w-full border-t border-black/10 bg-neutral-50 px-4 py-3 text-center text-xs font-bold transition hover:bg-neutral-100"
+                      >
+                        View all results →
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+            </form>
+          </div>
+
+          {/* Account + Cart */}
+          <div className="flex shrink-0 items-center gap-3">
             <button
               type="button"
               aria-label="Account"
@@ -425,6 +349,90 @@ export default function HomePage() {
               </span>
             </Link>
           </div>
+        </div>
+
+        {/* Mobile Search */}
+        <div className="border-t border-black/5 px-5 py-3 lg:hidden">
+          <form
+            onSubmit={handleSearch}
+            className="relative"
+          >
+            <div className="flex h-11 items-center rounded-full border border-black/10 bg-white">
+              <span className="ml-4 text-lg text-neutral-400">
+                ⌕
+              </span>
+
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={(event) =>
+                  setSearchQuery(event.target.value)
+                }
+                placeholder="Search products..."
+                className="min-w-0 flex-1 bg-transparent px-3 text-sm outline-none placeholder:text-neutral-400"
+              />
+
+              <button
+                type="submit"
+                className="mr-1 rounded-full bg-black px-4 py-2 text-xs font-bold text-white"
+              >
+                Search
+              </button>
+            </div>
+
+            {searchQuery.trim() && (
+              <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-50 overflow-hidden rounded-2xl border border-black/10 bg-white shadow-xl">
+                {searchResults.length === 0 ? (
+                  <div className="px-5 py-6 text-center text-sm text-neutral-500">
+                    No products found.
+                  </div>
+                ) : (
+                  <div className="max-h-[350px] overflow-y-auto">
+                    {searchResults.map((product) => (
+                      <Link
+                        key={product.id}
+                        href={`/products/${product.slug}`}
+                        onClick={() => setSearchQuery("")}
+                        className="flex items-center gap-3 border-b border-black/5 px-4 py-3 last:border-b-0 hover:bg-neutral-50"
+                      >
+                        <div className="h-11 w-11 shrink-0 overflow-hidden rounded-lg bg-[#f0f0ec]">
+                          {product.image ? (
+                            <img
+                              src={product.image}
+                              alt={product.name}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center font-black">
+                              D
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-semibold">
+                            {product.name}
+                          </p>
+
+                          <p className="text-xs text-neutral-400">
+                            {product.category?.name ||
+                              "General"}
+                          </p>
+                        </div>
+
+                        <p className="text-sm font-bold">
+                          ৳
+                          {Number(
+                            product.price
+                          ).toLocaleString("en-BD")}
+                        </p>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </form>
         </div>
       </header>
 
@@ -673,7 +681,8 @@ export default function HomePage() {
 
                   <div className="pt-4">
                     <p className="text-xs text-neutral-400">
-                      {product.category?.name || "General"}
+                      {product.category?.name ||
+                        "General"}
                     </p>
 
                     <h3 className="mt-1 font-semibold">
@@ -682,7 +691,10 @@ export default function HomePage() {
 
                     <div className="mt-2 flex items-center gap-2">
                       <span className="font-bold">
-                        ৳{product.price.toLocaleString("en-BD")}
+                        ৳
+                        {product.price.toLocaleString(
+                          "en-BD"
+                        )}
                       </span>
 
                       {product.oldPrice !== null && (
