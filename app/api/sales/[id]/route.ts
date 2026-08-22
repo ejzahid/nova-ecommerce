@@ -157,7 +157,11 @@ export async function PUT(
       },
       include: {
         customer: true,
-        items: true,
+        items: {
+          include: {
+            product: true,
+          },
+        },
       },
     });
 
