@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type Sale = {
   id: number;
@@ -58,6 +58,9 @@ export default function SalesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  const [searchInput, setSearchInput] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+
   useEffect(() => {
     async function loadSales() {
       try {
@@ -82,7 +85,10 @@ export default function SalesPage() {
             : []
         );
       } catch (error) {
-        console.error("Sales loading error:", error);
+        console.error(
+          "Sales loading error:",
+          error
+        );
 
         setError(
           error instanceof Error
@@ -96,6 +102,45 @@ export default function SalesPage() {
 
     loadSales();
   }, []);
+
+  function handleSearch(
+    event: React.FormEvent<HTMLFormElement>
+  ) {
+    event.preventDefault();
+
+    setSearchQuery(searchInput.trim());
+  }
+
+  function clearSearch() {
+    setSearchInput("");
+    setSearchQuery("");
+  }
+
+  const filteredSales = useMemo(() => {
+    const query = searchQuery
+      .trim()
+      .toLowerCase();
+
+    if (!query) {
+      return sales;
+    }
+
+    return sales.filter((sale) => {
+      const saleId = String(sale.id);
+
+      const customerName =
+        sale.customerName.toLowerCase();
+
+      const customerPhone =
+        sale.customerPhone.toLowerCase();
+
+      return (
+        saleId.includes(query) ||
+        customerName.includes(query) ||
+        customerPhone.includes(query)
+      );
+    });
+  }, [sales, searchQuery]);
 
   const totalRevenue = sales.reduce(
     (sum, sale) => sum + Number(sale.total),
@@ -166,9 +211,69 @@ export default function SalesPage() {
             </p>
 
             <p className="mt-2 text-3xl font-black">
-              ৳{totalRevenue.toLocaleString()}
+              ৳{totalRevenue.toLocaleString("en-BD")}
             </p>
           </div>
+        </div>
+
+        {/* SEARCH */}
+        <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <form
+            onSubmit={handleSearch}
+            className="flex flex-col gap-3 md:flex-row"
+          >
+            <div className="flex-1">
+              <label className="mb-2 block text-sm font-bold text-slate-700">
+                Search Sales
+              </label>
+
+              <input
+                type="text"
+                value={searchInput}
+                onChange={(event) =>
+                  setSearchInput(event.target.value)
+                }
+                placeholder="Search by Sale ID, customer name or phone..."
+                className="h-12 w-full rounded-xl border border-slate-200 px-4 text-sm outline-none transition focus:border-slate-950 focus:ring-2 focus:ring-slate-100"
+              />
+            </div>
+
+            <div className="flex items-end gap-2">
+              <button
+                type="submit"
+                className="h-12 rounded-xl bg-slate-950 px-6 text-sm font-bold text-white transition hover:bg-slate-800"
+              >
+                Search
+              </button>
+
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={clearSearch}
+                  className="h-12 rounded-xl border border-slate-200 bg-white px-5 text-sm font-bold text-slate-700 transition hover:border-slate-950"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+          </form>
+
+          {searchQuery && (
+            <p className="mt-3 text-sm text-slate-500">
+              Showing{" "}
+              <span className="font-bold text-slate-950">
+                {filteredSales.length}
+              </span>{" "}
+              result
+              {filteredSales.length !== 1
+                ? "s"
+                : ""}{" "}
+              for{" "}
+              <span className="font-bold text-slate-950">
+                "{searchQuery}"
+              </span>
+            </p>
+          )}
         </div>
 
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -182,22 +287,36 @@ export default function SalesPage() {
                 </p>
               </div>
             </div>
-          ) : sales.length === 0 ? (
+          ) : filteredSales.length === 0 ? (
             <div className="px-6 py-20 text-center">
               <p className="text-sm font-semibold text-slate-400">
-                NO SALES
+                {searchQuery
+                  ? "NO RESULTS"
+                  : "NO SALES"}
               </p>
 
               <h2 className="mt-2 text-xl font-bold">
-                No sales have been created yet.
+                {searchQuery
+                  ? "No sales matched your search."
+                  : "No sales have been created yet."}
               </h2>
 
-              <Link
-                href="/admin/sales/new"
-                className="mt-5 inline-flex rounded-xl bg-slate-950 px-5 py-3 text-sm font-bold text-white"
-              >
-                Create First Sale
-              </Link>
+              {searchQuery ? (
+                <button
+                  type="button"
+                  onClick={clearSearch}
+                  className="mt-5 inline-flex rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold transition hover:border-slate-950"
+                >
+                  Clear Search
+                </button>
+              ) : (
+                <Link
+                  href="/admin/sales/new"
+                  className="mt-5 inline-flex rounded-xl bg-slate-950 px-5 py-3 text-sm font-bold text-white"
+                >
+                  Create First Sale
+                </Link>
+              )}
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -235,7 +354,7 @@ export default function SalesPage() {
                 </thead>
 
                 <tbody className="divide-y divide-slate-100">
-                  {sales.map((sale) => (
+                  {filteredSales.map((sale) => (
                     <tr
                       key={sale.id}
                       className="transition hover:bg-slate-50"
@@ -277,7 +396,7 @@ export default function SalesPage() {
                         ৳
                         {Number(
                           sale.total
-                        ).toLocaleString()}
+                        ).toLocaleString("en-BD")}
                       </td>
 
                       <td className="px-5 py-5">
