@@ -39,7 +39,7 @@ export default function AdminPage() {
           </p>
         </div>
 
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
           <Link
             href="/admin/products"
             className="group rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:border-slate-300 hover:shadow-md"
@@ -59,8 +59,8 @@ export default function AdminPage() {
             </h3>
 
             <p className="mt-2 text-sm leading-6 text-slate-500">
-              Add, edit, delete and manage your store products, prices,
-              stock and product details.
+              Add, edit, delete and manage your store products,
+              prices, stock and product details.
             </p>
 
             <div className="mt-6 text-sm font-bold text-slate-950">
@@ -87,8 +87,8 @@ export default function AdminPage() {
             </h3>
 
             <p className="mt-2 text-sm leading-6 text-slate-500">
-              Create, manage and delete product categories, subtitles,
-              icons and sorting order.
+              Create, manage and delete product categories,
+              subtitles, icons and sorting order.
             </p>
 
             <div className="mt-6 text-sm font-bold text-slate-950">
@@ -115,7 +115,7 @@ export default function AdminPage() {
             </h3>
 
             <p className="mt-2 text-sm leading-6 text-slate-500">
-              View customer information, contact details and complete
+              View customers, contact information and complete
               order history.
             </p>
 
@@ -143,8 +143,8 @@ export default function AdminPage() {
             </h3>
 
             <p className="mt-2 text-sm leading-6 text-slate-500">
-              Create new sales, manage customer information, payments,
-              orders and sale status.
+              Create new sales, manage customer information,
+              payments, orders and sale status.
             </p>
 
             <div className="mt-6 text-sm font-bold text-slate-950">
