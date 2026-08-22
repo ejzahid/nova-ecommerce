@@ -35,11 +35,11 @@ export default function AdminPage() {
           </h2>
 
           <p className="mt-2 text-sm text-slate-500">
-            Manage your products and categories from here.
+            Manage products, categories and sales from here.
           </p>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-2">
+        <div className="grid gap-6 md:grid-cols-3">
           <Link
             href="/admin/products"
             className="group rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:border-slate-300 hover:shadow-md"
@@ -93,6 +93,34 @@ export default function AdminPage() {
 
             <div className="mt-6 text-sm font-bold text-slate-950">
               Manage Categories →
+            </div>
+          </Link>
+
+          <Link
+            href="/admin/sales"
+            className="group rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:border-slate-300 hover:shadow-md"
+          >
+            <div className="flex items-start justify-between">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-2xl">
+                🧾
+              </div>
+
+              <span className="text-slate-300 transition group-hover:text-slate-950">
+                →
+              </span>
+            </div>
+
+            <h3 className="mt-6 text-xl font-black">
+              Sales
+            </h3>
+
+            <p className="mt-2 text-sm leading-6 text-slate-500">
+              Create new sales, manage customer information,
+              payments, orders and sale status.
+            </p>
+
+            <div className="mt-6 text-sm font-bold text-slate-950">
+              Manage Sales →
             </div>
           </Link>
         </div>
