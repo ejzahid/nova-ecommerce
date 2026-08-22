@@ -39,7 +39,7 @@ export default function AdminPage() {
           </p>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
           <Link
             href="/admin/products"
             className="group rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:border-slate-300 hover:shadow-md"
@@ -115,8 +115,8 @@ export default function AdminPage() {
             </h3>
 
             <p className="mt-2 text-sm leading-6 text-slate-500">
-              View customer information, phone numbers, addresses
-              and purchase history.
+              View customer contact information, order history
+              and total purchase activity.
             </p>
 
             <div className="mt-6 text-sm font-bold text-slate-950">
