@@ -1,57 +1,274 @@
-import Link from "next/link";
-import { notFound } from "next/navigation";
-import { prisma } from "@/app/lib/prisma";
+"use client";
 
-type CustomerDetailsPageProps = {
-  params: Promise<{
-    id: string;
-  }>;
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+
+type Customer = {
+  id: number;
+  name: string;
+  phone: string;
+  address: string | null;
+  email: string | null;
+  createdAt: string;
+  updatedAt: string;
+  totalSales: number;
+  totalSpent: number;
+  sales: Sale[];
 };
 
-export default async function CustomerDetailsPage({
-  params,
-}: CustomerDetailsPageProps) {
-  const { id } = await params;
-  const customerId = Number(id);
+type SaleItem = {
+  id: number;
+  productId: number;
+  productName: string;
+  sku: string | null;
+  quantity: number;
+  unitPrice: number;
+  total: number;
+};
 
-  if (!Number.isInteger(customerId) || customerId <= 0) {
-    notFound();
+type Sale = {
+  id: number;
+  customerName: string;
+  customerPhone: string;
+  customerAddress: string | null;
+  subtotal: number;
+  discount: number;
+  deliveryFee: number;
+  total: number;
+  paymentMethod: string;
+  paymentStatus: string;
+  orderStatus: string;
+  note: string | null;
+  createdAt: string;
+  updatedAt: string;
+  items: SaleItem[];
+};
+
+export default function CustomerDetailsPage() {
+  const params = useParams();
+  const router = useRouter();
+
+  const customerId = String(params.id);
+
+  const [customer, setCustomer] = useState<Customer | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [address, setAddress] = useState("");
+  const [email, setEmail] = useState("");
+
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    async function loadCustomer() {
+      try {
+        setLoading(true);
+        setError("");
+
+        const response = await fetch(`/api/customers/${customerId}`);
+        const result = await response.json();
+
+        if (!response.ok || !result.success) {
+          throw new Error(
+            result.error || "Failed to load customer"
+          );
+        }
+
+        const data = result.customer as Customer;
+
+        setCustomer(data);
+        setName(data.name);
+        setPhone(data.phone);
+        setAddress(data.address || "");
+        setEmail(data.email || "");
+      } catch (err) {
+        console.error(err);
+
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Failed to load customer"
+        );
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadCustomer();
+  }, [customerId]);
+
+  async function handleSave() {
+    try {
+      setSaving(true);
+      setError("");
+
+      const response = await fetch("/api/customers", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          id: Number(customerId),
+          name,
+          phone,
+          address,
+          email,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(
+          result.error || "Failed to update customer"
+        );
+      }
+
+      const updated = result.customer;
+
+      setCustomer((current) =>
+        current
+          ? {
+              ...current,
+              name: updated.name,
+              phone: updated.phone,
+              address: updated.address,
+              email: updated.email,
+            }
+          : current
+      );
+
+      setName(updated.name);
+      setPhone(updated.phone);
+      setAddress(updated.address || "");
+      setEmail(updated.email || "");
+
+      setEditing(false);
+    } catch (err) {
+      console.error(err);
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to update customer"
+      );
+    } finally {
+      setSaving(false);
+    }
   }
 
-  const customer = await prisma.customer.findUnique({
-    where: {
-      id: customerId,
-    },
-    include: {
-      sales: {
-        orderBy: {
-          createdAt: "desc",
-        },
-        include: {
-          items: true,
-        },
-      },
-      _count: {
-        select: {
-          sales: true,
-        },
-      },
-    },
-  });
+  function handleCancelEdit() {
+    if (!customer) {
+      return;
+    }
+
+    setName(customer.name);
+    setPhone(customer.phone);
+    setAddress(customer.address || "");
+    setEmail(customer.email || "");
+
+    setError("");
+    setEditing(false);
+  }
+
+  async function handleDelete() {
+    if (!customer) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Delete customer "${customer.name}"?\n\nThis action cannot be undone.`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setDeleting(true);
+      setError("");
+
+      const response = await fetch(
+        `/api/customers?id=${customer.id}`,
+        {
+          method: "DELETE",
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(
+          result.error || "Failed to delete customer"
+        );
+      }
+
+      router.push("/admin/customers");
+      router.refresh();
+    } catch (err) {
+      console.error(err);
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to delete customer"
+      );
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <main className="min-h-screen bg-slate-100 text-slate-950">
+        <div className="mx-auto max-w-7xl px-6 py-16 text-center">
+          <p className="text-sm font-semibold text-slate-500">
+            Loading customer...
+          </p>
+        </div>
+      </main>
+    );
+  }
+
+  if (error && !customer) {
+    return (
+      <main className="min-h-screen bg-slate-100 text-slate-950">
+        <div className="mx-auto max-w-3xl px-6 py-16">
+          <div className="rounded-2xl border border-red-200 bg-white p-8 text-center shadow-sm">
+            <h1 className="text-2xl font-black">
+              Unable to load customer
+            </h1>
+
+            <p className="mt-3 text-sm text-red-600">
+              {error}
+            </p>
+
+            <Link
+              href="/admin/customers"
+              className="mt-6 inline-flex rounded-xl bg-slate-950 px-5 py-3 text-sm font-bold text-white"
+            >
+              Back to Customers
+            </Link>
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   if (!customer) {
-    notFound();
+    return null;
   }
-
-  const totalSpent = customer.sales.reduce(
-    (sum, sale) => sum + Number(sale.total),
-    0
-  );
 
   return (
     <main className="min-h-screen bg-slate-100 text-slate-950">
       <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-6 py-5">
           <div>
             <p className="text-sm font-medium text-slate-400">
               Digital Shop
@@ -72,19 +289,51 @@ export default async function CustomerDetailsPage({
       </header>
 
       <section className="mx-auto max-w-7xl px-6 py-8">
-        <div className="mb-8">
-          <p className="text-sm font-semibold uppercase tracking-wider text-slate-400">
-            Customer
-          </p>
+        <div className="mb-8 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-wider text-slate-400">
+              Customer
+            </p>
 
-          <h2 className="mt-2 text-3xl font-black tracking-tight">
-            {customer.name}
-          </h2>
+            <h2 className="mt-2 text-3xl font-black tracking-tight">
+              {customer.name}
+            </h2>
 
-          <p className="mt-2 text-sm text-slate-500">
-            Customer ID: #{customer.id}
-          </p>
+            <p className="mt-2 text-sm text-slate-500">
+              Customer ID: #{customer.id}
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-3">
+            {!editing && (
+              <button
+                type="button"
+                onClick={() => {
+                  setError("");
+                  setEditing(true);
+                }}
+                className="rounded-xl bg-slate-950 px-5 py-3 text-sm font-bold text-white transition hover:bg-slate-800"
+              >
+                Edit Customer
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={handleDelete}
+              disabled={deleting}
+              className="rounded-xl border border-red-200 bg-white px-5 py-3 text-sm font-bold text-red-600 transition hover:border-red-300 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {deleting ? "Deleting..." : "Delete Customer"}
+            </button>
+          </div>
         </div>
+
+        {error && (
+          <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-sm font-semibold text-red-700">
+            {error}
+          </div>
+        )}
 
         <div className="grid gap-6 md:grid-cols-3">
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -103,7 +352,7 @@ export default async function CustomerDetailsPage({
             </p>
 
             <p className="mt-2 text-2xl font-black">
-              {customer._count.sales}
+              {customer.totalSales}
             </p>
           </div>
 
@@ -114,7 +363,7 @@ export default async function CustomerDetailsPage({
 
             <p className="mt-2 text-2xl font-black">
               ৳
-              {totalSpent.toLocaleString("en-BD", {
+              {customer.totalSpent.toLocaleString("en-BD", {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2,
               })}
@@ -123,61 +372,137 @@ export default async function CustomerDetailsPage({
         </div>
 
         <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h3 className="text-xl font-black">
-            Customer Information
-          </h3>
-
-          <div className="mt-5 grid gap-5 md:grid-cols-2">
+          <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
             <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                Name
-              </p>
+              <h3 className="text-xl font-black">
+                Customer Information
+              </h3>
 
-              <p className="mt-1 font-semibold">
-                {customer.name}
-              </p>
-            </div>
-
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                Email
-              </p>
-
-              <p className="mt-1 font-semibold">
-                {customer.email || "Not provided"}
-              </p>
-            </div>
-
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                Phone
-              </p>
-
-              <p className="mt-1 font-semibold">
-                {customer.phone}
-              </p>
-            </div>
-
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                Address
-              </p>
-
-              <p className="mt-1 font-semibold">
-                {customer.address || "Not provided"}
-              </p>
-            </div>
-
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                Customer Since
-              </p>
-
-              <p className="mt-1 font-semibold">
-                {customer.createdAt.toLocaleDateString("en-BD")}
+              <p className="mt-1 text-sm text-slate-500">
+                {editing
+                  ? "Update the customer's information below."
+                  : "Customer contact information."}
               </p>
             </div>
           </div>
+
+          {editing ? (
+            <div className="mt-6 grid gap-5 md:grid-cols-2">
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                  Name
+                </label>
+
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-slate-950"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                  Phone
+                </label>
+
+                <input
+                  type="text"
+                  value={phone}
+                  onChange={(event) => setPhone(event.target.value)}
+                  className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-slate-950"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                  Email
+                </label>
+
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-slate-950"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                  Address
+                </label>
+
+                <input
+                  type="text"
+                  value={address}
+                  onChange={(event) => setAddress(event.target.value)}
+                  className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-slate-950"
+                />
+              </div>
+
+              <div className="flex flex-wrap gap-3 md:col-span-2">
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="rounded-xl bg-slate-950 px-5 py-3 text-sm font-bold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {saving ? "Saving..." : "Save Changes"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleCancelEdit}
+                  disabled={saving}
+                  className="rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold transition hover:border-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-6 grid gap-5 md:grid-cols-2">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                  Name
+                </p>
+
+                <p className="mt-1 font-semibold">
+                  {customer.name}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                  Email
+                </p>
+
+                <p className="mt-1 font-semibold">
+                  {customer.email || "Not provided"}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                  Phone
+                </p>
+
+                <p className="mt-1 font-semibold">
+                  {customer.phone}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                  Address
+                </p>
+
+                <p className="mt-1 font-semibold">
+                  {customer.address || "Not provided"}
+                </p>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -232,7 +557,7 @@ export default async function CustomerDetailsPage({
                   {customer.sales.map((sale) => (
                     <tr
                       key={sale.id}
-                      className="border-b border-slate-100 last:border-0 hover:bg-slate-50"
+                      className="border-b border-slate-100 last:border-0"
                     >
                       <td className="px-6 py-5">
                         <Link
@@ -244,7 +569,9 @@ export default async function CustomerDetailsPage({
                       </td>
 
                       <td className="px-6 py-5 text-sm text-slate-500">
-                        {sale.createdAt.toLocaleDateString("en-BD")}
+                        {new Date(sale.createdAt).toLocaleDateString(
+                          "en-BD"
+                        )}
                       </td>
 
                       <td className="px-6 py-5">
@@ -274,7 +601,7 @@ export default async function CustomerDetailsPage({
 
                       <td className="px-6 py-5 text-right font-black">
                         ৳
-                        {Number(sale.total).toLocaleString("en-BD", {
+                        {sale.total.toLocaleString("en-BD", {
                           minimumFractionDigits: 2,
                           maximumFractionDigits: 2,
                         })}
