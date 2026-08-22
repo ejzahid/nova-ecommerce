@@ -2,10 +2,19 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+
+type Product = {
+  id: number;
+  name: string;
+  price: number | string;
+  stock: number;
+  sku: string | null;
+};
 
 type SaleItem = {
   id: number;
+  productId: number;
   productName: string;
   sku: string | null;
   quantity: number;
@@ -47,13 +56,20 @@ type ApiSale = Omit<Sale, "items"> & {
   items: ApiSaleItem[];
 };
 
+type EditItem = {
+  productId: string;
+  quantity: string;
+};
+
 function normalizeSale(sale: ApiSale): Sale {
   return {
     ...sale,
     items: sale.items.map((item) => ({
       id: item.id,
+      productId: item.productId,
       productName:
-        item.product?.name || "Product unavailable",
+        item.product?.name ||
+        "Product unavailable",
       sku: item.product?.sku || null,
       quantity: item.quantity,
       unitPrice: item.unitPrice,
@@ -70,54 +86,154 @@ export default function EditSalePage() {
     ? params.id[0]
     : params.id;
 
-  const [sale, setSale] = useState<Sale | null>(null);
-  const [orderStatus, setOrderStatus] =
-    useState("PENDING");
-  const [paymentStatus, setPaymentStatus] =
-    useState("PENDING");
+  const [sale, setSale] = useState<Sale | null>(
+    null
+  );
+
+  const [products, setProducts] = useState<
+    Product[]
+  >([]);
 
   const [loading, setLoading] = useState(true);
+  const [loadingProducts, setLoadingProducts] =
+    useState(true);
   const [saving, setSaving] = useState(false);
+
+  const [customerName, setCustomerName] =
+    useState("");
+  const [customerPhone, setCustomerPhone] =
+    useState("");
+  const [customerAddress, setCustomerAddress] =
+    useState("");
+
+  const [items, setItems] = useState<EditItem[]>(
+    []
+  );
+
+  const [discount, setDiscount] = useState("0");
+  const [deliveryFee, setDeliveryFee] =
+    useState("0");
+  const [paymentMethod, setPaymentMethod] =
+    useState("COD");
+  const [paymentStatus, setPaymentStatus] =
+    useState("PENDING");
+  const [orderStatus, setOrderStatus] =
+    useState("PENDING");
+  const [note, setNote] = useState("");
+
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
   useEffect(() => {
-    async function loadSale() {
+    async function loadData() {
       try {
         setLoading(true);
         setError("");
 
-        const response = await fetch(
-          `/api/sales/${saleId}`,
-          {
-            cache: "no-store",
-          }
-        );
+        const [saleResponse, productsResponse] =
+          await Promise.all([
+            fetch(`/api/sales/${saleId}`, {
+              cache: "no-store",
+            }),
+            fetch("/api/products", {
+              cache: "no-store",
+            }),
+          ]);
 
-        const result = await response.json();
+        const saleResult =
+          await saleResponse.json();
 
-        if (!response.ok || !result.success) {
+        const productsResult =
+          await productsResponse.json();
+
+        if (
+          !saleResponse.ok ||
+          !saleResult.success
+        ) {
           throw new Error(
-            result.error || "Failed to load sale"
+            saleResult.error ||
+              "Failed to load sale"
           );
         }
 
-        const normalizedSale = normalizeSale(
-          result.sale
-        );
+        if (
+          !productsResponse.ok ||
+          !productsResult.success
+        ) {
+          throw new Error(
+            productsResult.error ||
+              "Failed to load products"
+          );
+        }
+
+        const normalizedSale =
+          normalizeSale(saleResult.sale);
 
         setSale(normalizedSale);
 
-        setOrderStatus(
-          normalizedSale.orderStatus || "PENDING"
+        setProducts(
+          Array.isArray(
+            productsResult.products
+          )
+            ? productsResult.products
+            : []
+        );
+
+        setCustomerName(
+          normalizedSale.customerName
+        );
+
+        setCustomerPhone(
+          normalizedSale.customerPhone
+        );
+
+        setCustomerAddress(
+          normalizedSale.customerAddress || ""
+        );
+
+        setItems(
+          normalizedSale.items.map((item) => ({
+            productId: String(
+              item.productId
+            ),
+            quantity: String(
+              item.quantity
+            ),
+          }))
+        );
+
+        setDiscount(
+          String(
+            Number(normalizedSale.discount)
+          )
+        );
+
+        setDeliveryFee(
+          String(
+            Number(
+              normalizedSale.deliveryFee
+            )
+          )
+        );
+
+        setPaymentMethod(
+          normalizedSale.paymentMethod || "COD"
         );
 
         setPaymentStatus(
-          normalizedSale.paymentStatus || "PENDING"
+          normalizedSale.paymentStatus ||
+            "PENDING"
         );
+
+        setOrderStatus(
+          normalizedSale.orderStatus ||
+            "PENDING"
+        );
+
+        setNote(normalizedSale.note || "");
       } catch (error) {
         console.error(
-          "Sale loading error:",
+          "Edit sale loading error:",
           error
         );
 
@@ -128,13 +244,99 @@ export default function EditSalePage() {
         );
       } finally {
         setLoading(false);
+        setLoadingProducts(false);
       }
     }
 
     if (saleId) {
-      loadSale();
+      loadData();
     }
   }, [saleId]);
+
+  function updateItem(
+    index: number,
+    field: keyof EditItem,
+    value: string
+  ) {
+    setItems((current) =>
+      current.map((item, itemIndex) =>
+        itemIndex === index
+          ? {
+              ...item,
+              [field]: value,
+            }
+          : item
+      )
+    );
+  }
+
+  function addItem() {
+    setItems((current) => [
+      ...current,
+      {
+        productId: "",
+        quantity: "1",
+      },
+    ]);
+  }
+
+  function removeItem(index: number) {
+    setItems((current) =>
+      current.length === 1
+        ? current
+        : current.filter(
+            (_, itemIndex) =>
+              itemIndex !== index
+          )
+    );
+  }
+
+  const subtotal = useMemo(() => {
+    return items.reduce((sum, item) => {
+      const product = products.find(
+        (productItem) =>
+          String(productItem.id) ===
+          item.productId
+      );
+
+      if (!product) {
+        return sum;
+      }
+
+      const quantity = Number(
+        item.quantity
+      );
+
+      if (
+        !Number.isInteger(quantity) ||
+        quantity <= 0
+      ) {
+        return sum;
+      }
+
+      return (
+        sum +
+        Number(product.price) * quantity
+      );
+    }, 0);
+  }, [items, products]);
+
+  const discountAmount = Math.max(
+    0,
+    Number(discount || 0)
+  );
+
+  const deliveryAmount = Math.max(
+    0,
+    Number(deliveryFee || 0)
+  );
+
+  const total = Math.max(
+    0,
+    subtotal -
+      discountAmount +
+      deliveryAmount
+  );
 
   async function handleSave(
     event: React.FormEvent<HTMLFormElement>
@@ -146,31 +348,160 @@ export default function EditSalePage() {
       setError("");
       setSuccess("");
 
+      if (!customerName.trim()) {
+        throw new Error(
+          "Customer name is required"
+        );
+      }
+
+      if (!customerPhone.trim()) {
+        throw new Error(
+          "Customer phone is required"
+        );
+      }
+
+      if (
+        !Number.isFinite(
+          discountAmount
+        ) ||
+        discountAmount < 0
+      ) {
+        throw new Error(
+          "Invalid discount"
+        );
+      }
+
+      if (discountAmount > subtotal) {
+        throw new Error(
+          "Discount cannot be greater than subtotal"
+        );
+      }
+
+      if (
+        !Number.isFinite(
+          deliveryAmount
+        ) ||
+        deliveryAmount < 0
+      ) {
+        throw new Error(
+          "Invalid delivery fee"
+        );
+      }
+
+      if (items.length === 0) {
+        throw new Error(
+          "At least one product is required"
+        );
+      }
+
+      const selectedProductIds =
+        new Set<number>();
+
+      const validItems = items.map(
+        (item) => {
+          if (!item.productId) {
+            throw new Error(
+              "Please select a product"
+            );
+          }
+
+          const productId = Number(
+            item.productId
+          );
+
+          const quantity = Number(
+            item.quantity
+          );
+
+          const product = products.find(
+            (productItem) =>
+              productItem.id ===
+              productId
+          );
+
+          if (!product) {
+            throw new Error(
+              "Selected product was not found"
+            );
+          }
+
+          if (
+            !Number.isInteger(
+              quantity
+            ) ||
+            quantity <= 0
+          ) {
+            throw new Error(
+              `Invalid quantity for ${product.name}`
+            );
+          }
+
+          if (
+            selectedProductIds.has(
+              productId
+            )
+          ) {
+            throw new Error(
+              `${product.name} is already added. Please change the quantity instead.`
+            );
+          }
+
+          selectedProductIds.add(
+            productId
+          );
+
+          return {
+            productId,
+            quantity,
+          };
+        }
+      );
+
       const response = await fetch(
         `/api/sales/${saleId}`,
         {
           method: "PUT",
           headers: {
-            "Content-Type": "application/json",
+            "Content-Type":
+              "application/json",
           },
           body: JSON.stringify({
-            orderStatus,
+            customerName:
+              customerName.trim(),
+            customerPhone:
+              customerPhone.trim(),
+            customerAddress:
+              customerAddress.trim() ||
+              null,
+            items: validItems,
+            discount:
+              discountAmount,
+            deliveryFee:
+              deliveryAmount,
+            paymentMethod,
             paymentStatus,
+            orderStatus,
+            note:
+              note.trim() || null,
           }),
         }
       );
 
-      const result = await response.json();
+      const result =
+        await response.json();
 
-      if (!response.ok || !result.success) {
+      if (
+        !response.ok ||
+        !result.success
+      ) {
         throw new Error(
-          result.error || "Failed to update sale"
+          result.error ||
+            "Failed to update sale"
         );
       }
 
-      const normalizedSale = normalizeSale(
-        result.sale
-      );
+      const normalizedSale =
+        normalizeSale(result.sale);
 
       setSale(normalizedSale);
 
@@ -183,7 +514,7 @@ export default function EditSalePage() {
           `/admin/sales/${saleId}`
         );
         router.refresh();
-      }, 500);
+      }, 700);
     } catch (error) {
       console.error(
         "Sale update error:",
@@ -308,80 +639,299 @@ export default function EditSalePage() {
 
             <div className="mt-5 grid gap-5 md:grid-cols-2">
               <div>
-                <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                  Name
-                </p>
+                <label className="mb-2 block text-sm font-bold">
+                  Customer Name
+                </label>
 
-                <p className="mt-1 font-bold">
-                  {sale.customerName}
-                </p>
+                <input
+                  type="text"
+                  value={customerName}
+                  onChange={(event) =>
+                    setCustomerName(
+                      event.target.value
+                    )
+                  }
+                  required
+                  className="h-12 w-full rounded-xl border border-slate-200 px-4 text-sm outline-none focus:border-slate-950"
+                />
               </div>
 
               <div>
-                <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                <label className="mb-2 block text-sm font-bold">
                   Phone
-                </p>
+                </label>
 
-                <p className="mt-1 font-bold">
-                  {sale.customerPhone}
-                </p>
+                <input
+                  type="tel"
+                  value={customerPhone}
+                  onChange={(event) =>
+                    setCustomerPhone(
+                      event.target.value
+                    )
+                  }
+                  required
+                  className="h-12 w-full rounded-xl border border-slate-200 px-4 text-sm outline-none focus:border-slate-950"
+                />
               </div>
 
               <div className="md:col-span-2">
-                <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                <label className="mb-2 block text-sm font-bold">
                   Address
-                </p>
+                </label>
 
-                <p className="mt-1 text-sm text-slate-700">
-                  {sale.customerAddress ||
-                    "No address provided"}
-                </p>
+                <textarea
+                  value={customerAddress}
+                  onChange={(event) =>
+                    setCustomerAddress(
+                      event.target.value
+                    )
+                  }
+                  rows={3}
+                  className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-slate-950"
+                />
               </div>
             </div>
           </div>
 
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-black">
-              Products
-            </h2>
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-black">
+                Products
+              </h2>
 
-            <div className="mt-5 divide-y divide-slate-100">
-              {sale.items.map((item) => (
-                <div
-                  key={item.id}
-                  className="flex items-center justify-between gap-5 py-4 first:pt-0 last:pb-0"
-                >
-                  <div>
-                    <p className="font-bold">
-                      {item.productName}
-                    </p>
+              <button
+                type="button"
+                onClick={addItem}
+                className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-bold text-white transition hover:bg-slate-800"
+              >
+                + Add Product
+              </button>
+            </div>
 
-                    {item.sku && (
-                      <p className="mt-1 text-xs text-slate-400">
-                        SKU: {item.sku}
-                      </p>
-                    )}
+            <div className="mt-5 space-y-4">
+              {items.map(
+                (item, index) => {
+                  const selectedProduct =
+                    products.find(
+                      (product) =>
+                        String(
+                          product.id
+                        ) ===
+                        item.productId
+                    );
 
-                    <p className="mt-1 text-sm text-slate-500">
-                      {item.quantity} × ৳
-                      {Number(
-                        item.unitPrice
-                      ).toLocaleString()}
-                    </p>
-                  </div>
+                  return (
+                    <div
+                      key={index}
+                      className="grid gap-3 rounded-xl border border-slate-200 p-4 md:grid-cols-[1fr_140px_100px]"
+                    >
+                      <select
+                        value={
+                          item.productId
+                        }
+                        onChange={(event) =>
+                          updateItem(
+                            index,
+                            "productId",
+                            event.target
+                              .value
+                          )
+                        }
+                        disabled={
+                          loadingProducts
+                        }
+                        required
+                        className="h-11 rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-slate-950"
+                      >
+                        <option value="">
+                          {loadingProducts
+                            ? "Loading products..."
+                            : "Select product"}
+                        </option>
 
-                  <p className="font-black">
-                    ৳
-                    {Number(
-                      item.total
-                    ).toLocaleString()}
-                  </p>
-                </div>
-              ))}
+                        {products.map(
+                          (product) => {
+                            const isCurrent =
+                              String(
+                                product.id
+                              ) ===
+                              item.productId;
+
+                            return (
+                              <option
+                                key={
+                                  product.id
+                                }
+                                value={
+                                  product.id
+                                }
+                                disabled={
+                                  product.stock <=
+                                    0 &&
+                                  !isCurrent
+                                }
+                              >
+                                {
+                                  product.name
+                                }{" "}
+                                — ৳
+                                {Number(
+                                  product.price
+                                ).toLocaleString(
+                                  "en-BD"
+                                )}{" "}
+                                (
+                                {
+                                  product.stock
+                                }{" "}
+                                in stock)
+                              </option>
+                            );
+                          }
+                        )}
+                      </select>
+
+                      <input
+                        type="number"
+                        min="1"
+                        value={
+                          item.quantity
+                        }
+                        onChange={(event) =>
+                          updateItem(
+                            index,
+                            "quantity",
+                            event.target
+                              .value
+                          )
+                        }
+                        className="h-11 rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-slate-950"
+                      />
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          removeItem(index)
+                        }
+                        className="h-11 rounded-xl border border-red-200 px-3 text-sm font-bold text-red-600 transition hover:bg-red-50"
+                      >
+                        Remove
+                      </button>
+
+                      {selectedProduct && (
+                        <div className="md:col-span-3 -mt-1 text-xs text-slate-400">
+                          SKU:{" "}
+                          {selectedProduct.sku ||
+                            "N/A"}{" "}
+                          · Current stock:{" "}
+                          {
+                            selectedProduct.stock
+                          }
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+              )}
             </div>
           </div>
 
           <div className="grid gap-6 md:grid-cols-2">
+            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+              <h2 className="text-lg font-black">
+                Payment
+              </h2>
+
+              <div className="mt-5 space-y-5">
+                <div>
+                  <label className="mb-2 block text-sm font-bold">
+                    Payment Method
+                  </label>
+
+                  <select
+                    value={paymentMethod}
+                    onChange={(event) =>
+                      setPaymentMethod(
+                        event.target
+                          .value
+                      )
+                    }
+                    className="h-12 w-full rounded-xl border border-slate-200 px-4 text-sm outline-none focus:border-slate-950"
+                  >
+                    <option value="COD">
+                      Cash on Delivery
+                    </option>
+
+                    <option value="CASH">
+                      Cash
+                    </option>
+
+                    <option value="BKASH">
+                      bKash
+                    </option>
+
+                    <option value="NAGAD">
+                      Nagad
+                    </option>
+
+                    <option value="CARD">
+                      Card
+                    </option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-bold">
+                    Payment Status
+                  </label>
+
+                  <select
+                    value={paymentStatus}
+                    onChange={(event) =>
+                      setPaymentStatus(
+                        event.target
+                          .value
+                      )
+                    }
+                    className="h-12 w-full rounded-xl border border-slate-200 px-4 text-sm outline-none focus:border-slate-950"
+                  >
+                    <option value="PENDING">
+                      Pending
+                    </option>
+
+                    <option value="PAID">
+                      Paid
+                    </option>
+
+                    <option value="FAILED">
+                      Failed
+                    </option>
+
+                    <option value="REFUNDED">
+                      Refunded
+                    </option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-bold">
+                    Note
+                  </label>
+
+                  <textarea
+                    value={note}
+                    onChange={(event) =>
+                      setNote(
+                        event.target.value
+                      )
+                    }
+                    rows={4}
+                    className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-slate-950"
+                  />
+                </div>
+              </div>
+            </div>
+
             <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
               <h2 className="text-lg font-black">
                 Order Status
@@ -399,59 +949,38 @@ export default function EditSalePage() {
                       event.target.value
                     )
                   }
-                  className="h-12 w-full rounded-xl border border-slate-200 px-4 text-sm outline-none transition focus:border-slate-950"
+                  className="h-12 w-full rounded-xl border border-slate-200 px-4 text-sm outline-none focus:border-slate-950"
                 >
                   <option value="PENDING">
                     Pending
                   </option>
+
                   <option value="PROCESSING">
                     Processing
                   </option>
+
                   <option value="SHIPPED">
                     Shipped
                   </option>
+
                   <option value="DELIVERED">
                     Delivered
                   </option>
+
                   <option value="CANCELLED">
                     Cancelled
                   </option>
                 </select>
               </div>
-            </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-              <h2 className="text-lg font-black">
-                Payment Status
-              </h2>
+              <div className="mt-6 border-t border-slate-100 pt-6">
+                <h3 className="text-sm font-black">
+                  Current Sale
+                </h3>
 
-              <div className="mt-5">
-                <label className="mb-2 block text-sm font-bold">
-                  Status
-                </label>
-
-                <select
-                  value={paymentStatus}
-                  onChange={(event) =>
-                    setPaymentStatus(
-                      event.target.value
-                    )
-                  }
-                  className="h-12 w-full rounded-xl border border-slate-200 px-4 text-sm outline-none transition focus:border-slate-950"
-                >
-                  <option value="PENDING">
-                    Pending
-                  </option>
-                  <option value="PAID">
-                    Paid
-                  </option>
-                  <option value="FAILED">
-                    Failed
-                  </option>
-                  <option value="REFUNDED">
-                    Refunded
-                  </option>
-                </select>
+                <p className="mt-2 text-sm text-slate-500">
+                  Sale #{sale.id}
+                </p>
               </div>
             </div>
           </div>
@@ -469,49 +998,67 @@ export default function EditSalePage() {
 
                 <span className="font-bold">
                   ৳
-                  {Number(
-                    sale.subtotal
-                  ).toLocaleString()}
+                  {subtotal.toLocaleString(
+                    "en-BD",
+                    {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    }
+                  )}
                 </span>
               </div>
 
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-500">
+              <div>
+                <label className="mb-2 block text-sm font-bold">
                   Discount
-                </span>
+                </label>
 
-                <span className="font-bold">
-                  - ৳
-                  {Number(
-                    sale.discount
-                  ).toLocaleString()}
-                </span>
+                <input
+                  type="number"
+                  min="0"
+                  value={discount}
+                  onChange={(event) =>
+                    setDiscount(
+                      event.target.value
+                    )
+                  }
+                  className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-slate-950"
+                />
               </div>
 
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-500">
+              <div>
+                <label className="mb-2 block text-sm font-bold">
                   Delivery Fee
-                </span>
+                </label>
 
-                <span className="font-bold">
-                  ৳
-                  {Number(
-                    sale.deliveryFee
-                  ).toLocaleString()}
-                </span>
+                <input
+                  type="number"
+                  min="0"
+                  value={deliveryFee}
+                  onChange={(event) =>
+                    setDeliveryFee(
+                      event.target.value
+                    )
+                  }
+                  className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-slate-950"
+                />
               </div>
 
               <div className="border-t border-slate-100 pt-4">
-                <div className="flex justify-between">
+                <div className="flex items-center justify-between">
                   <span className="font-bold">
                     Total
                   </span>
 
                   <span className="text-2xl font-black">
                     ৳
-                    {Number(
-                      sale.total
-                    ).toLocaleString()}
+                    {total.toLocaleString(
+                      "en-BD",
+                      {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      }
+                    )}
                   </span>
                 </div>
               </div>
@@ -528,7 +1075,10 @@ export default function EditSalePage() {
 
             <button
               type="submit"
-              disabled={saving}
+              disabled={
+                saving ||
+                loadingProducts
+              }
               className="rounded-xl bg-slate-950 px-7 py-3 text-sm font-bold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {saving
