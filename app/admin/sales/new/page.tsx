@@ -80,6 +80,8 @@ export default function NewSalePage() {
 
     if (!cleanPhone) {
       setLookupMessage("");
+      setCustomerName("");
+      setCustomerAddress("");
       return;
     }
 
@@ -87,9 +89,7 @@ export default function NewSalePage() {
       setLookupMessage("Looking up customer...");
 
       const response = await fetch(
-        `/api/customers?phone=${encodeURIComponent(
-          cleanPhone
-        )}`,
+        `/api/customers?phone=${encodeURIComponent(cleanPhone)}`,
         {
           cache: "no-store",
         }
@@ -104,24 +104,20 @@ export default function NewSalePage() {
       }
 
       if (result.customer) {
-        setCustomerName(
-          result.customer.name || ""
-        );
-
+        setCustomerName(result.customer.name || "");
         setCustomerAddress(
           result.customer.address || ""
         );
 
-        setLookupMessage(
-          "Existing customer found."
-        );
+        setLookupMessage("Existing customer found.");
       } else {
-        setLookupMessage(
-          "New customer."
-        );
+        setCustomerName("");
+        setCustomerAddress("");
+        setLookupMessage("New customer.");
       }
     } catch (error) {
       setLookupMessage("");
+
       console.error(
         "Customer lookup error:",
         error
@@ -161,8 +157,7 @@ export default function NewSalePage() {
       current.length === 1
         ? current
         : current.filter(
-            (_, itemIndex) =>
-              itemIndex !== index
+            (_, itemIndex) => itemIndex !== index
           )
     );
   }
@@ -171,8 +166,7 @@ export default function NewSalePage() {
     (sum, item) => {
       const product = products.find(
         (productItem) =>
-          String(productItem.id) ===
-          item.productId
+          String(productItem.id) === item.productId
       );
 
       if (!product) {
@@ -196,11 +190,21 @@ export default function NewSalePage() {
     0
   );
 
+  const discountAmount = Math.max(
+    0,
+    Number(discount || 0)
+  );
+
+  const deliveryAmount = Math.max(
+    0,
+    Number(deliveryFee || 0)
+  );
+
   const total = Math.max(
     0,
     subtotal -
-      Number(discount || 0) +
-      Number(deliveryFee || 0)
+      discountAmount +
+      deliveryAmount
   );
 
   async function handleSubmit(
@@ -225,12 +229,59 @@ export default function NewSalePage() {
         );
       }
 
+      if (discountAmount > subtotal) {
+        throw new Error(
+          "Discount cannot be greater than subtotal"
+        );
+      }
+
+      const selectedProductIds = new Set<number>();
+
       const validItems = items
         .filter((item) => item.productId)
-        .map((item) => ({
-          productId: Number(item.productId),
-          quantity: Number(item.quantity),
-        }));
+        .map((item) => {
+          const productId = Number(item.productId);
+          const quantity = Number(item.quantity);
+
+          const product = products.find(
+            (productItem) =>
+              productItem.id === productId
+          );
+
+          if (!product) {
+            throw new Error(
+              "Selected product was not found"
+            );
+          }
+
+          if (
+            !Number.isInteger(quantity) ||
+            quantity <= 0
+          ) {
+            throw new Error(
+              `Invalid quantity for ${product.name}`
+            );
+          }
+
+          if (selectedProductIds.has(productId)) {
+            throw new Error(
+              `${product.name} is already added. Please change the quantity instead.`
+            );
+          }
+
+          selectedProductIds.add(productId);
+
+          if (quantity > product.stock) {
+            throw new Error(
+              `Only ${product.stock} unit(s) of ${product.name} available in stock`
+            );
+          }
+
+          return {
+            productId,
+            quantity,
+          };
+        });
 
       if (validItems.length === 0) {
         throw new Error(
@@ -238,46 +289,29 @@ export default function NewSalePage() {
         );
       }
 
-      const response = await fetch(
-        "/api/sales",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type":
-              "application/json",
-          },
-          body: JSON.stringify({
-            customerName:
-              customerName.trim(),
-            customerPhone:
-              customerPhone.trim(),
-            customerAddress:
-              customerAddress.trim() ||
-              null,
-            items: validItems,
-            discount: Number(
-              discount || 0
-            ),
-            deliveryFee: Number(
-              deliveryFee || 0
-            ),
-            paymentMethod,
-            note:
-              note.trim() || null,
-          }),
-        }
-      );
+      const response = await fetch("/api/sales", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          customerName: customerName.trim(),
+          customerPhone: customerPhone.trim(),
+          customerAddress:
+            customerAddress.trim() || null,
+          items: validItems,
+          discount: discountAmount,
+          deliveryFee: deliveryAmount,
+          paymentMethod,
+          note: note.trim() || null,
+        }),
+      });
 
-      const result =
-        await response.json();
+      const result = await response.json();
 
-      if (
-        !response.ok ||
-        !result.success
-      ) {
+      if (!response.ok || !result.success) {
         throw new Error(
-          result.error ||
-            "Failed to create sale"
+          result.error || "Failed to create sale"
         );
       }
 
@@ -286,8 +320,7 @@ export default function NewSalePage() {
       );
 
       setTimeout(() => {
-        window.location.href =
-          "/admin/sales";
+        window.location.href = "/admin/sales";
       }, 700);
     } catch (error) {
       console.error(
@@ -367,11 +400,11 @@ export default function NewSalePage() {
                       event.target.value
                     );
                     setLookupMessage("");
+                    setCustomerName("");
+                    setCustomerAddress("");
                   }}
                   onBlur={() =>
-                    lookupCustomer(
-                      customerPhone
-                    )
+                    lookupCustomer(customerPhone)
                   }
                   placeholder="01XXXXXXXXX"
                   required
@@ -460,9 +493,7 @@ export default function NewSalePage() {
                           event.target.value
                         )
                       }
-                      disabled={
-                        loadingProducts
-                      }
+                      disabled={loadingProducts}
                       required
                       className="h-11 rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-slate-950"
                     >
@@ -472,29 +503,19 @@ export default function NewSalePage() {
                           : "Select product"}
                       </option>
 
-                      {products.map(
-                        (product) => (
-                          <option
-                            key={
-                              product.id
-                            }
-                            value={
-                              product.id
-                            }
-                            disabled={
-                              product.stock <=
-                              0
-                            }
-                          >
-                            {product.name} — ৳
-                            {Number(
-                              product.price
-                            ).toLocaleString()}{" "}
-                            ({product.stock} in
-                            stock)
-                          </option>
-                        )
-                      )}
+                      {products.map((product) => (
+                        <option
+                          key={product.id}
+                          value={product.id}
+                          disabled={product.stock <= 0}
+                        >
+                          {product.name} — ৳
+                          {Number(
+                            product.price
+                          ).toLocaleString("en-BD")}{" "}
+                          ({product.stock} in stock)
+                        </option>
+                      ))}
                     </select>
 
                     <input
@@ -577,9 +598,7 @@ export default function NewSalePage() {
                   <textarea
                     value={note}
                     onChange={(event) =>
-                      setNote(
-                        event.target.value
-                      )
+                      setNote(event.target.value)
                     }
                     rows={4}
                     className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-slate-950"
@@ -601,7 +620,13 @@ export default function NewSalePage() {
 
                   <span className="font-bold">
                     ৳
-                    {subtotal.toLocaleString()}
+                    {subtotal.toLocaleString(
+                      "en-BD",
+                      {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      }
+                    )}
                   </span>
                 </div>
 
@@ -649,7 +674,13 @@ export default function NewSalePage() {
 
                     <span className="text-2xl font-black">
                       ৳
-                      {total.toLocaleString()}
+                      {total.toLocaleString(
+                        "en-BD",
+                        {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        }
+                      )}
                     </span>
                   </div>
                 </div>
@@ -667,7 +698,7 @@ export default function NewSalePage() {
 
             <button
               type="submit"
-              disabled={saving}
+              disabled={saving || loadingProducts}
               className="rounded-xl bg-slate-950 px-7 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
             >
               {saving
