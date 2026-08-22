@@ -1,4 +1,3 @@
-@'
 import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 
@@ -36,4 +35,3 @@ export async function GET(request: Request) {
     );
   }
 }
-'@ | Set-Content -LiteralPath ".\app\api\customers\route.ts" -Encoding UTF8
