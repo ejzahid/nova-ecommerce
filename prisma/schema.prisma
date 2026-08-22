@@ -16,25 +16,20 @@ model Category {
   isActive    Boolean  @default(true)
   sortOrder   Int      @default(0)
 
+  // Parent category
   parentId    Int?
 
-  parent      Category?  @relation(
-    "CategoryChildren",
-    fields: [parentId],
-    references: [id],
-    onDelete: Cascade
-  )
-
-  children    Category[] @relation("CategoryChildren")
+  parent      Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children    Category[] @relation("CategoryHierarchy")
 
   products    Product[]
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  @@unique([parentId, name])
   @@index([parentId])
   @@index([isActive, sortOrder])
+  @@index([parentId, name])
 }
 
 model Product {
@@ -42,23 +37,26 @@ model Product {
   name        String
   slug        String     @unique
   description String?
+
   categoryId  Int
+
   price       Decimal    @db.Decimal(12, 2)
   oldPrice    Decimal?   @db.Decimal(12, 2)
+
   sku         String?    @unique
+
   stock       Int        @default(0)
+
   image       String?
   badge       String?
+
   isActive    Boolean    @default(true)
   isFeatured  Boolean    @default(false)
+
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 
-  category    Category   @relation(
-    fields: [categoryId],
-    references: [id]
-  )
-
+  category    Category   @relation(fields: [categoryId], references: [id])
   saleItems   SaleItem[]
 
   @@index([categoryId])
@@ -71,17 +69,20 @@ model Customer {
   phone     String   @unique
   address   String?
   email     String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  sales     Sale[]
+  sales Sale[]
 
   @@index([phone])
 }
 
 model Sale {
   id              Int        @id @default(autoincrement())
+
   customerId      Int?
+
   customerName    String
   customerPhone   String
   customerAddress String?
@@ -100,11 +101,7 @@ model Sale {
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
 
-  customer        Customer?  @relation(
-    fields: [customerId],
-    references: [id]
-  )
-
+  customer        Customer?  @relation(fields: [customerId], references: [id])
   items           SaleItem[]
 
   @@index([customerId])
@@ -116,25 +113,20 @@ model Sale {
 
 model SaleItem {
   id          Int      @id @default(autoincrement())
+
   saleId      Int
   productId   Int
 
   productName String
   sku         String?
+
   quantity    Int
+
   unitPrice   Decimal  @db.Decimal(12, 2)
   total       Decimal  @db.Decimal(12, 2)
 
-  sale        Sale     @relation(
-    fields: [saleId],
-    references: [id],
-    onDelete: Cascade
-  )
-
-  product     Product  @relation(
-    fields: [productId],
-    references: [id]
-  )
+  sale        Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  product     Product  @relation(fields: [productId], references: [id])
 
   @@index([saleId])
   @@index([productId])
