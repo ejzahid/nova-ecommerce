@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useCart } from "../cart/CartContext";
 
 type Category = {
@@ -12,6 +13,8 @@ type Category = {
   icon: string | null;
   isActive: boolean;
   sortOrder: number;
+  parentId: number | null;
+  children?: Category[];
 };
 
 type Product = {
@@ -51,6 +54,7 @@ function formatPrice(value: number | string | null) {
 
 export default function ShopPage() {
   const { addToCart, cart } = useCart();
+  const searchParams = useSearchParams();
 
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -67,9 +71,30 @@ export default function ShopPage() {
     null
   );
 
+  const [categoryOpen, setCategoryOpen] =
+    useState(false);
+
+  /*
+   * Read search/category from URL.
+   *
+   * Examples:
+   * /shop?search=iphone
+   * /shop?category=smartphone
+   */
+  useEffect(() => {
+    const urlSearch = searchParams.get("search") || "";
+    const urlCategory =
+      searchParams.get("category") || "all";
+
+    setSearch(urlSearch);
+    setSelectedCategory(urlCategory);
+  }, [searchParams]);
+
   useEffect(() => {
     async function loadProducts() {
       try {
+        setLoading(true);
+
         const response = await fetch("/api/products", {
           cache: "no-store",
         });
@@ -80,8 +105,8 @@ export default function ShopPage() {
 
         const result = await response.json();
 
-        if (result.success) {
-          setProducts(result.products || []);
+        if (result.success && Array.isArray(result.products)) {
+          setProducts(result.products);
         } else {
           setProducts([]);
         }
@@ -99,6 +124,8 @@ export default function ShopPage() {
   useEffect(() => {
     async function loadCategories() {
       try {
+        setCategoryLoading(true);
+
         const response = await fetch("/api/categories", {
           cache: "no-store",
         });
@@ -109,8 +136,11 @@ export default function ShopPage() {
 
         const result = await response.json();
 
-        if (result.success) {
-          setCategories(result.categories || []);
+        if (
+          result.success &&
+          Array.isArray(result.categories)
+        ) {
+          setCategories(result.categories);
         } else {
           setCategories([]);
         }
@@ -129,6 +159,44 @@ export default function ShopPage() {
     loadCategories();
   }, []);
 
+  /*
+   * Parent categories
+   */
+  const parentCategories = useMemo(() => {
+    return categories
+      .filter(
+        (category) =>
+          category.parentId === null &&
+          category.isActive
+      )
+      .sort((a, b) =>
+        a.name.localeCompare(b.name)
+      );
+  }, [categories]);
+
+  /*
+   * Find selected category including children.
+   */
+  const selectedCategoryObject = useMemo(() => {
+    if (selectedCategory === "all") {
+      return null;
+    }
+
+    return (
+      categories.find(
+        (category) =>
+          category.slug === selectedCategory
+      ) || null
+    );
+  }, [categories, selectedCategory]);
+
+  /*
+   * Product filtering
+   *
+   * Parent category:
+   * show products belonging to that parent or
+   * any child category.
+   */
   const filteredProducts = useMemo(() => {
     const query = search.trim().toLowerCase();
 
@@ -139,14 +207,36 @@ export default function ShopPage() {
       const categoryName =
         product.category?.name || "";
 
-      const matchesCategory =
-        selectedCategory === "all" ||
-        categorySlug === selectedCategory;
+      let matchesCategory = true;
+
+      if (selectedCategory !== "all") {
+        matchesCategory =
+          categorySlug === selectedCategory;
+
+        if (
+          !matchesCategory &&
+          selectedCategoryObject?.children
+        ) {
+          matchesCategory =
+            selectedCategoryObject.children.some(
+              (child) =>
+                child.slug === categorySlug ||
+                child.children?.some(
+                  (grandChild) =>
+                    grandChild.slug === categorySlug
+                )
+            );
+        }
+      }
 
       const matchesSearch =
         !query ||
-        product.name.toLowerCase().includes(query) ||
-        categoryName.toLowerCase().includes(query) ||
+        product.name
+          .toLowerCase()
+          .includes(query) ||
+        categoryName
+          .toLowerCase()
+          .includes(query) ||
         (product.description || "")
           .toLowerCase()
           .includes(query);
@@ -156,8 +246,43 @@ export default function ShopPage() {
   }, [
     products,
     selectedCategory,
+    selectedCategoryObject,
     search,
   ]);
+
+  function handleCategoryChange(slug: string) {
+    setSelectedCategory(slug);
+    setCategoryOpen(false);
+
+    const url =
+      slug === "all"
+        ? "/shop"
+        : `/shop?category=${encodeURIComponent(slug)}`;
+
+    window.history.pushState({}, "", url);
+  }
+
+  function handleSearch(value: string) {
+    setSearch(value);
+
+    const cleanValue = value.trim();
+
+    if (cleanValue) {
+      window.history.replaceState(
+        {},
+        "",
+        `/shop?search=${encodeURIComponent(
+          cleanValue
+        )}`
+      );
+    } else {
+      window.history.replaceState(
+        {},
+        "",
+        "/shop"
+      );
+    }
+  }
 
   function handleAddToCart(product: Product) {
     addToCart({
@@ -184,40 +309,338 @@ export default function ShopPage() {
 
   return (
     <main className="min-h-screen bg-[#f5f5f2] text-neutral-950">
-      {/* Header */}
-      <header className="border-b border-neutral-200 bg-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5">
-          <Link
-            href="/"
-            className="text-2xl font-black tracking-tight"
-          >
-            Digital Shop
-          </Link>
-
-          <div className="flex items-center gap-4">
+      {/* HEADER */}
+      <header className="sticky top-0 z-50 border-b border-black/10 bg-[#f5f5f2]/95 backdrop-blur">
+        <div className="mx-auto max-w-[1440px] px-5 md:px-8">
+          {/* Top row */}
+          <div className="flex h-[76px] items-center justify-between">
             <Link
               href="/"
-              className="text-sm font-semibold text-neutral-500 transition hover:text-neutral-950"
+              className="text-[28px] font-black tracking-[-0.08em]"
             >
-              Home
+              Digital Shop
+              <span className="text-neutral-400">
+                .
+              </span>
             </Link>
 
-            <Link
-              href="/cart"
-              className="rounded-full border border-neutral-200 px-4 py-2 text-sm font-semibold transition hover:border-neutral-950"
-            >
-              Cart
-              {cartCount > 0 && (
-                <span className="ml-2">
-                  ({cartCount})
+            <div className="flex items-center gap-3">
+              {/* SEARCH */}
+              <div className="hidden md:block">
+                <div className="relative">
+                  <input
+                    type="search"
+                    value={search}
+                    onChange={(event) =>
+                      handleSearch(event.target.value)
+                    }
+                    placeholder="Search products..."
+                    className="w-[220px] rounded-full border border-black/10 bg-white px-5 py-2.5 pr-10 text-sm outline-none transition focus:border-black"
+                  />
+
+                  <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-lg">
+                    ⌕
+                  </span>
+                </div>
+              </div>
+
+              {/* MOBILE SEARCH */}
+              <button
+                type="button"
+                aria-label="Search"
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-black/10 bg-white hover:bg-black hover:text-white md:hidden"
+                onClick={() => {
+                  const input =
+                    document.getElementById(
+                      "mobile-shop-search"
+                    ) as HTMLInputElement | null;
+
+                  input?.focus();
+                }}
+              >
+                ⌕
+              </button>
+
+              {/* ACCOUNT */}
+              <button
+                type="button"
+                aria-label="Account"
+                className="hidden h-10 w-10 items-center justify-center rounded-full border border-black/10 bg-white hover:bg-black hover:text-white sm:flex"
+              >
+                ◯
+              </button>
+
+              {/* CART */}
+              <Link
+                href="/cart"
+                aria-label="Cart"
+                className="relative flex h-10 w-10 items-center justify-center rounded-full border border-black/10 bg-white hover:bg-black hover:text-white"
+              >
+                ♡
+
+                {cartCount > 0 && (
+                  <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-black px-1 text-[9px] text-white">
+                    {cartCount}
+                  </span>
+                )}
+              </Link>
+            </div>
+          </div>
+
+          {/* NAVIGATION ROW */}
+          <div className="relative flex min-h-[48px] items-center justify-between border-t border-black/5">
+            <div className="flex items-center gap-7">
+              {/* CATEGORY */}
+              <button
+                type="button"
+                onClick={() =>
+                  setCategoryOpen((value) => !value)
+                }
+                className="flex items-center gap-2 py-3 text-sm font-semibold"
+              >
+                Category
+
+                <span
+                  className={`text-xs transition ${
+                    categoryOpen
+                      ? "rotate-180"
+                      : ""
+                  }`}
+                >
+                  ▼
                 </span>
-              )}
-            </Link>
+              </button>
+
+              <Link
+                href="/"
+                className="py-3 text-sm font-medium hover:opacity-50"
+              >
+                Home
+              </Link>
+
+              <Link
+                href="/shop"
+                className="py-3 text-sm font-medium hover:opacity-50"
+              >
+                Shop
+              </Link>
+
+              <Link
+                href="/new-arrivals"
+                className="hidden py-3 text-sm font-medium hover:opacity-50 sm:block"
+              >
+                New Arrivals
+              </Link>
+            </div>
+
+            <div className="hidden items-center gap-6 md:flex">
+              <Link
+                href="/flash-deals"
+                className="text-sm font-semibold text-red-600 hover:text-red-700"
+              >
+                Flash Deals
+              </Link>
+
+              <Link
+                href="/shop"
+                className="text-sm font-medium hover:opacity-50"
+              >
+                All Products
+              </Link>
+
+              <Link
+                href="/track-order"
+                className="text-sm font-medium hover:opacity-50"
+              >
+                Track Order
+              </Link>
+            </div>
+
+            {/* CATEGORY MEGA MENU */}
+            {categoryOpen && (
+              <div className="absolute left-0 top-full z-50 w-full border-x border-b border-black/10 bg-white shadow-2xl">
+                <div className="max-h-[70vh] overflow-y-auto p-6 md:p-8">
+                  <div className="mb-6 flex items-center justify-between">
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-neutral-400">
+                        Browse
+                      </p>
+
+                      <h2 className="mt-1 text-2xl font-black">
+                        Categories
+                      </h2>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleCategoryChange("all")
+                      }
+                      className="text-sm font-semibold underline underline-offset-4"
+                    >
+                      All Products
+                    </button>
+                  </div>
+
+                  {categoryLoading ? (
+                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                      {[1, 2, 3, 4].map(
+                        (item) => (
+                          <div
+                            key={item}
+                            className="h-32 animate-pulse rounded-2xl bg-neutral-100"
+                          />
+                        )
+                      )}
+                    </div>
+                  ) : parentCategories.length ===
+                    0 ? (
+                    <div className="rounded-2xl bg-neutral-50 p-8 text-center">
+                      <p className="text-sm text-neutral-500">
+                        No categories available.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                      {parentCategories.map(
+                        (parent) => (
+                          <div
+                            key={parent.id}
+                            className="min-w-0"
+                          >
+                            {/* PARENT */}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleCategoryChange(
+                                  parent.slug
+                                )
+                              }
+                              className="group flex w-full items-center gap-3 text-left"
+                            >
+                              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-black text-sm text-white">
+                                {parent.icon ||
+                                  "✦"}
+                              </span>
+
+                              <span className="text-base font-bold group-hover:underline">
+                                {parent.name}
+                              </span>
+                            </button>
+
+                            {/* SUB CATEGORY */}
+                            {parent.children &&
+                              parent.children.length >
+                                0 && (
+                                <div className="mt-4 space-y-4 pl-[52px]">
+                                  {[
+                                    ...parent.children,
+                                  ]
+                                    .sort(
+                                      (a, b) =>
+                                        a.name.localeCompare(
+                                          b.name
+                                        )
+                                    )
+                                    .map(
+                                      (
+                                        child
+                                      ) => (
+                                        <div
+                                          key={
+                                            child.id
+                                          }
+                                        >
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              handleCategoryChange(
+                                                child.slug
+                                              )
+                                            }
+                                            className="text-sm font-semibold text-neutral-700 hover:text-black hover:underline"
+                                          >
+                                            {
+                                              child.name
+                                            }
+                                          </button>
+
+                                          {/* CHILD CATEGORY */}
+                                          {child
+                                            .children &&
+                                            child
+                                              .children
+                                              .length >
+                                              0 && (
+                                              <div className="mt-2 space-y-1.5 border-l border-black/10 pl-3">
+                                                {[
+                                                  ...child.children,
+                                                ]
+                                                  .sort(
+                                                    (
+                                                      a,
+                                                      b
+                                                    ) =>
+                                                      a.name.localeCompare(
+                                                        b.name
+                                                      )
+                                                  )
+                                                  .map(
+                                                    (
+                                                      grandChild
+                                                    ) => (
+                                                      <button
+                                                        key={
+                                                          grandChild.id
+                                                        }
+                                                        type="button"
+                                                        onClick={() =>
+                                                          handleCategoryChange(
+                                                            grandChild.slug
+                                                          )
+                                                        }
+                                                        className="block text-left text-xs text-neutral-500 hover:text-black hover:underline"
+                                                      >
+                                                        {
+                                                          grandChild.name
+                                                        }
+                                                      </button>
+                                                    )
+                                                  )}
+                                              </div>
+                                            )}
+                                        </div>
+                                      )
+                                    )}
+                                </div>
+                              )}
+                          </div>
+                        )
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </header>
 
-      {/* Hero */}
+      {/* MOBILE SEARCH */}
+      <section className="border-b border-black/10 bg-white px-5 py-4 md:hidden">
+        <input
+          id="mobile-shop-search"
+          type="search"
+          value={search}
+          onChange={(event) =>
+            handleSearch(event.target.value)
+          }
+          placeholder="Search products..."
+          className="w-full rounded-full border border-black/10 bg-[#f5f5f2] px-5 py-3 text-sm outline-none focus:border-black"
+        />
+      </section>
+
+      {/* HERO */}
       <section className="border-b border-neutral-200 bg-white">
         <div className="mx-auto max-w-7xl px-6 py-12 md:py-16">
           <p className="text-xs font-bold uppercase tracking-[0.2em] text-neutral-400">
@@ -238,60 +661,47 @@ export default function ShopPage() {
         </div>
       </section>
 
-      {/* Controls */}
+      {/* FILTER */}
       <section className="mx-auto max-w-7xl px-6 py-8">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-          {/* Categories */}
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() =>
-                setSelectedCategory("all")
-              }
-              className={`rounded-full px-5 py-2.5 text-sm font-semibold transition ${
-                selectedCategory === "all"
-                  ? "bg-neutral-950 text-white"
-                  : "border border-neutral-200 bg-white text-neutral-600 hover:border-neutral-950 hover:text-neutral-950"
-              }`}
-            >
-              All Products
-            </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() =>
+              handleCategoryChange("all")
+            }
+            className={`rounded-full px-5 py-2.5 text-sm font-semibold transition ${
+              selectedCategory === "all"
+                ? "bg-neutral-950 text-white"
+                : "border border-neutral-200 bg-white text-neutral-600 hover:border-neutral-950"
+            }`}
+          >
+            All Products
+          </button>
 
-            {!categoryLoading &&
-              categories.map((category) => (
-                <button
-                  key={category.id}
-                  type="button"
-                  onClick={() =>
-                    setSelectedCategory(category.slug)
-                  }
-                  className={`rounded-full px-5 py-2.5 text-sm font-semibold transition ${
-                    selectedCategory === category.slug
-                      ? "bg-neutral-950 text-white"
-                      : "border border-neutral-200 bg-white text-neutral-600 hover:border-neutral-950 hover:text-neutral-950"
-                  }`}
-                >
-                  {category.name}
-                </button>
-              ))}
-          </div>
-
-          {/* Search */}
-          <div className="w-full lg:w-80">
-            <input
-              type="search"
-              value={search}
-              onChange={(event) =>
-                setSearch(event.target.value)
-              }
-              placeholder="Search products..."
-              className="w-full rounded-full border border-neutral-200 bg-white px-5 py-3 text-sm outline-none transition placeholder:text-neutral-400 focus:border-neutral-950"
-            />
-          </div>
+          {!categoryLoading &&
+            parentCategories.map((category) => (
+              <button
+                key={category.id}
+                type="button"
+                onClick={() =>
+                  handleCategoryChange(
+                    category.slug
+                  )
+                }
+                className={`rounded-full px-5 py-2.5 text-sm font-semibold transition ${
+                  selectedCategory ===
+                  category.slug
+                    ? "bg-neutral-950 text-white"
+                    : "border border-neutral-200 bg-white text-neutral-600 hover:border-neutral-950"
+                }`}
+              >
+                {category.name}
+              </button>
+            ))}
         </div>
       </section>
 
-      {/* Products */}
+      {/* PRODUCTS */}
       <section className="mx-auto max-w-7xl px-6 pb-16">
         {loading ? (
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -305,7 +715,9 @@ export default function ShopPage() {
 
                   <div className="space-y-3 p-5">
                     <div className="h-3 w-20 animate-pulse rounded bg-neutral-100" />
+
                     <div className="h-5 w-3/4 animate-pulse rounded bg-neutral-100" />
+
                     <div className="h-5 w-24 animate-pulse rounded bg-neutral-100" />
                   </div>
                 </div>
@@ -323,15 +735,15 @@ export default function ShopPage() {
             </h2>
 
             <p className="mt-2 text-sm text-neutral-500">
-              Try another search or choose a different
-              category.
+              Try another search or choose a
+              different category.
             </p>
 
             <button
               type="button"
               onClick={() => {
                 setSearch("");
-                setSelectedCategory("all");
+                handleCategoryChange("all");
               }}
               className="mt-6 rounded-full bg-neutral-950 px-6 py-3 text-sm font-semibold text-white transition hover:bg-neutral-800"
             >
@@ -412,7 +824,8 @@ export default function ShopPage() {
                           {formatPrice(product.price)}
                         </span>
 
-                        {product.oldPrice !== null && (
+                        {product.oldPrice !==
+                          null && (
                           <span className="text-sm text-neutral-400 line-through">
                             {formatPrice(
                               product.oldPrice

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type Category = {
   id: number;
@@ -11,11 +11,8 @@ type Category = {
   icon: string | null;
   isActive: boolean;
   sortOrder: number;
-  children?: {
-    id: number;
-    name: string;
-    slug: string;
-  }[];
+  parentId: number | null;
+  children?: Category[];
 };
 
 type Product = {
@@ -37,6 +34,21 @@ type Product = {
   isFeatured: boolean;
 };
 
+function sortCategories(categories: Category[]) {
+  return [...categories]
+    .sort((a, b) =>
+      a.name.localeCompare(b.name, undefined, {
+        sensitivity: "base",
+      })
+    )
+    .map((category) => ({
+      ...category,
+      children: category.children
+        ? sortCategories(category.children)
+        : [],
+    }));
+}
+
 export default function HomePage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -50,18 +62,17 @@ export default function HomePage() {
   const [categoryOpen, setCategoryOpen] =
     useState(false);
 
+  const [searchOpen, setSearchOpen] =
+    useState(false);
+
   const [searchQuery, setSearchQuery] =
     useState("");
 
-  const categoryRef =
-    useRef<HTMLDivElement>(null);
-
-  /*
-   * LOAD CATEGORIES
-   */
   useEffect(() => {
     async function loadCategories() {
       try {
+        setCategoriesLoading(true);
+
         const response = await fetch(
           "/api/categories",
           {
@@ -69,20 +80,23 @@ export default function HomePage() {
           }
         );
 
-        if (!response.ok) {
+        const result = await response.json();
+
+        if (!response.ok || !result.success) {
           throw new Error(
-            "Failed to load categories"
+            result.error ||
+              "Failed to load categories"
           );
         }
 
-        const result = await response.json();
-
-        if (
-          result.success &&
+        const loadedCategories =
           Array.isArray(result.categories)
-        ) {
-          setCategories(result.categories);
-        }
+            ? result.categories
+            : [];
+
+        setCategories(
+          sortCategories(loadedCategories)
+        );
       } catch (error) {
         console.error(
           "Category loading error:",
@@ -96,12 +110,11 @@ export default function HomePage() {
     loadCategories();
   }, []);
 
-  /*
-   * LOAD PRODUCTS
-   */
   useEffect(() => {
     async function loadProducts() {
       try {
+        setProductsLoading(true);
+
         const response = await fetch(
           "/api/products",
           {
@@ -109,18 +122,16 @@ export default function HomePage() {
           }
         );
 
-        if (!response.ok) {
+        const result = await response.json();
+
+        if (!response.ok || !result.success) {
           throw new Error(
-            "Failed to load products"
+            result.error ||
+              "Failed to load products"
           );
         }
 
-        const result = await response.json();
-
-        if (
-          result.success &&
-          Array.isArray(result.products)
-        ) {
+        if (Array.isArray(result.products)) {
           setProducts(result.products);
         }
       } catch (error) {
@@ -136,40 +147,21 @@ export default function HomePage() {
     loadProducts();
   }, []);
 
-  /*
-   * CLOSE CATEGORY WHEN CLICKING OUTSIDE
-   */
-  useEffect(() => {
-    function handleClickOutside(
-      event: MouseEvent
-    ) {
-      if (
-        categoryRef.current &&
-        !categoryRef.current.contains(
-          event.target as Node
+  const featuredProducts = useMemo(() => {
+    return products.filter(
+      (product) => product.isFeatured
+    ).length > 0
+      ? products.filter(
+          (product) => product.isFeatured
         )
-      ) {
-        setCategoryOpen(false);
-      }
-    }
+      : products.slice(0, 8);
+  }, [products]);
 
-    document.addEventListener(
-      "mousedown",
-      handleClickOutside
-    );
+  function handleSearchSubmit(
+    event: React.FormEvent<HTMLFormElement>
+  ) {
+    event.preventDefault();
 
-    return () => {
-      document.removeEventListener(
-        "mousedown",
-        handleClickOutside
-      );
-    };
-  }, []);
-
-  /*
-   * HEADER SEARCH
-   */
-  function handleSearch() {
     const query = searchQuery.trim();
 
     if (!query) {
@@ -181,13 +173,7 @@ export default function HomePage() {
     )}`;
   }
 
-  function handleSearchKeyDown(
-    event: React.KeyboardEvent<HTMLInputElement>
-  ) {
-    if (event.key === "Enter") {
-      handleSearch();
-    }
-  }
+  const totalRevenue = 0;
 
   return (
     <main className="min-h-screen bg-[#f5f5f2] text-[#111111]">
@@ -196,13 +182,14 @@ export default function HomePage() {
         FREE DELIVERY ON ORDERS OVER ৳2,000
       </div>
 
-      {/* Header */}
-      <header className="sticky top-0 z-50 border-b border-black/10 bg-[#f5f5f2]/95 backdrop-blur">
-        <div className="mx-auto flex h-[76px] max-w-[1440px] items-center justify-between gap-6 px-5 md:px-8">
+      {/* HEADER */}
+      <header className="sticky top-0 z-[100] border-b border-black/10 bg-[#f5f5f2]/95 backdrop-blur-xl">
+        {/* Main Header Row */}
+        <div className="mx-auto flex h-[76px] max-w-[1440px] items-center justify-between px-5 md:px-8">
           {/* Logo */}
           <Link
             href="/"
-            className="shrink-0 text-[28px] font-black tracking-[-0.08em]"
+            className="text-[28px] font-black tracking-[-0.08em]"
           >
             Digital Shop
             <span className="text-neutral-400">
@@ -210,81 +197,20 @@ export default function HomePage() {
             </span>
           </Link>
 
-          {/* Main Navigation */}
-          <nav className="hidden items-center gap-8 md:flex">
-            <Link
-              href="/"
-              className="text-sm font-medium hover:opacity-50"
-            >
-              Home
-            </Link>
-
-            <Link
-              href="/shop"
-              className="text-sm font-medium hover:opacity-50"
-            >
-              Shop
-            </Link>
-
-            <Link
-              href="/new-arrivals"
-              className="text-sm font-medium hover:opacity-50"
-            >
-              New Arrivals
-            </Link>
-          </nav>
-
-          {/* Header Search */}
-          <div className="hidden flex-1 justify-center lg:flex">
-            <div className="flex w-full max-w-[300px] items-center rounded-full border border-black/10 bg-white px-4">
-              <span className="mr-2 text-lg text-neutral-400">
-                ⌕
-              </span>
-
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(event) =>
-                  setSearchQuery(
-                    event.target.value
-                  )
-                }
-                onKeyDown={
-                  handleSearchKeyDown
-                }
-                placeholder="Search products..."
-                className="w-full bg-transparent py-2.5 text-sm outline-none placeholder:text-neutral-400"
-              />
-
-              <button
-                type="button"
-                onClick={handleSearch}
-                className="text-xs font-bold text-neutral-500 hover:text-black"
-              >
-                Search
-              </button>
-            </div>
-          </div>
-
-          {/* Header Actions */}
-          <div className="flex shrink-0 items-center gap-3">
-            {/* Mobile Search */}
+          {/* Right Actions */}
+          <div className="flex items-center gap-3">
+            {/* Search */}
             <button
               type="button"
               aria-label="Search"
-              onClick={() => {
-                const query =
-                  window.prompt(
-                    "Search products"
-                  );
-
-                if (query?.trim()) {
-                  window.location.href = `/shop?search=${encodeURIComponent(
-                    query.trim()
-                  )}`;
-                }
-              }}
-              className="flex h-10 w-10 items-center justify-center rounded-full border border-black/10 bg-white hover:bg-black hover:text-white lg:hidden"
+              onClick={() =>
+                setSearchOpen((value) => !value)
+              }
+              className={`flex h-10 w-10 items-center justify-center rounded-full border border-black/10 bg-white text-xl transition ${
+                searchOpen
+                  ? "bg-black text-white"
+                  : "hover:bg-black hover:text-white"
+              }`}
             >
               ⌕
             </button>
@@ -293,7 +219,7 @@ export default function HomePage() {
             <button
               type="button"
               aria-label="Account"
-              className="hidden h-10 w-10 items-center justify-center rounded-full border border-black/10 bg-white hover:bg-black hover:text-white sm:flex"
+              className="hidden h-10 w-10 items-center justify-center rounded-full border border-black/10 bg-white transition hover:bg-black hover:text-white sm:flex"
             >
               ◯
             </button>
@@ -302,7 +228,7 @@ export default function HomePage() {
             <Link
               href="/cart"
               aria-label="Cart"
-              className="relative flex h-10 w-10 items-center justify-center rounded-full border border-black/10 bg-white hover:bg-black hover:text-white"
+              className="relative flex h-10 w-10 items-center justify-center rounded-full border border-black/10 bg-white transition hover:bg-black hover:text-white"
             >
               ♡
 
@@ -312,124 +238,206 @@ export default function HomePage() {
             </Link>
           </div>
         </div>
+
+        {/* Search Bar */}
+        {searchOpen && (
+          <div className="border-t border-black/10 bg-white">
+            <div className="mx-auto max-w-[1440px] px-5 py-4 md:px-8">
+              <form
+                onSubmit={handleSearchSubmit}
+                className="relative"
+              >
+                <input
+                  autoFocus
+                  type="search"
+                  value={searchQuery}
+                  onChange={(event) =>
+                    setSearchQuery(
+                      event.target.value
+                    )
+                  }
+                  placeholder="Search products..."
+                  className="w-full rounded-full border border-black/10 bg-[#f5f5f2] px-5 py-4 pr-14 text-sm outline-none transition focus:border-black"
+                />
+
+                <button
+                  type="submit"
+                  aria-label="Submit search"
+                  className="absolute right-2 top-2 flex h-10 w-10 items-center justify-center rounded-full bg-black text-white"
+                >
+                  ⌕
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Navigation Row */}
+        <div className="border-t border-black/10">
+          <div className="mx-auto flex max-w-[1440px] items-center gap-7 overflow-x-auto px-5 md:px-8">
+            {/* Category */}
+            <div className="relative shrink-0">
+              <button
+                type="button"
+                onClick={() =>
+                  setCategoryOpen(
+                    (value) => !value
+                  )
+                }
+                className={`flex h-14 items-center gap-2 text-sm font-bold transition ${
+                  categoryOpen
+                    ? "text-black"
+                    : "text-neutral-700 hover:text-black"
+                }`}
+              >
+                Category
+
+                <span
+                  className={`text-xs transition-transform ${
+                    categoryOpen
+                      ? "rotate-180"
+                      : ""
+                  }`}
+                >
+                  ▾
+                </span>
+              </button>
+            </div>
+
+            <Link
+              href="/"
+              className="shrink-0 text-sm font-medium text-neutral-700 transition hover:text-black"
+            >
+              Home
+            </Link>
+
+            <Link
+              href="/shop"
+              className="shrink-0 text-sm font-medium text-neutral-700 transition hover:text-black"
+            >
+              Shop
+            </Link>
+
+            <Link
+              href="/new-arrivals"
+              className="shrink-0 text-sm font-medium text-neutral-700 transition hover:text-black"
+            >
+              New Arrivals
+            </Link>
+
+            <Link
+              href="/flash-deals"
+              className="shrink-0 text-sm font-medium text-neutral-700 transition hover:text-black"
+            >
+              Flash Deals
+            </Link>
+
+            <Link
+              href="/shop"
+              className="shrink-0 text-sm font-medium text-neutral-700 transition hover:text-black"
+            >
+              All Products
+            </Link>
+
+            <Link
+              href="/track-order"
+              className="shrink-0 text-sm font-medium text-neutral-700 transition hover:text-black"
+            >
+              Track Order
+            </Link>
+          </div>
+        </div>
+
+        {/* CATEGORY MEGA MENU */}
+        {categoryOpen && (
+          <div className="absolute left-0 right-0 top-full border-t border-black/10 bg-white shadow-[0_20px_50px_rgba(0,0,0,0.12)]">
+            <div className="mx-auto max-h-[70vh] max-w-[1440px] overflow-y-auto px-5 py-8 md:px-8">
+              {categoriesLoading ? (
+                <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+                  {[1, 2, 3, 4].map(
+                    (item) => (
+                      <div
+                        key={item}
+                        className="h-40 animate-pulse rounded-2xl bg-[#f5f5f2]"
+                      />
+                    )
+                  )}
+                </div>
+              ) : categories.length === 0 ? (
+                <div className="py-10 text-center">
+                  <p className="text-sm text-neutral-500">
+                    No categories available.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-4">
+                  {categories.map(
+                    (category) => (
+                      <div key={category.id}>
+                        {/* Parent */}
+                        <Link
+                          href={`/shop?category=${encodeURIComponent(
+                            category.slug
+                          )}`}
+                          onClick={() =>
+                            setCategoryOpen(
+                              false
+                            )
+                          }
+                          className="group flex items-center gap-3"
+                        >
+                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-black text-white">
+                            {category.icon ||
+                              "✦"}
+                          </span>
+
+                          <span className="text-sm font-black transition group-hover:underline">
+                            {category.name}
+                          </span>
+                        </Link>
+
+                        {/* Children */}
+                        {category.children &&
+                          category.children
+                            .length > 0 && (
+                            <div className="mt-4 ml-[52px] space-y-2">
+                              {category.children.map(
+                                (
+                                  child
+                                ) => (
+                                  <Link
+                                    key={
+                                      child.id
+                                    }
+                                    href={`/shop?category=${encodeURIComponent(
+                                      child.slug
+                                    )}`}
+                                    onClick={() =>
+                                      setCategoryOpen(
+                                        false
+                                      )
+                                    }
+                                    className="block text-xs text-neutral-500 transition hover:text-black hover:underline"
+                                  >
+                                    {
+                                      child.name
+                                    }
+                                  </Link>
+                                )
+                              )}
+                            </div>
+                          )}
+                      </div>
+                    )
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </header>
 
-      {/* Category Navigation */}
-      <div className="sticky top-[76px] z-40 border-b border-black/10 bg-[#f5f5f2]/95 backdrop-blur">
-        <div
-          ref={categoryRef}
-          className="mx-auto max-w-[1440px] px-5 md:px-8"
-        >
-          <button
-            type="button"
-            onClick={() =>
-              setCategoryOpen(
-                (previous) => !previous
-              )
-            }
-            className="flex h-12 items-center gap-2 text-sm font-semibold transition hover:opacity-60"
-          >
-            <span>Category</span>
-
-            <span
-              className={`text-[10px] transition-transform ${
-                categoryOpen
-                  ? "rotate-180"
-                  : ""
-              }`}
-            >
-              ▼
-            </span>
-          </button>
-
-          {/* Category Mega Menu */}
-          {categoryOpen && (
-            <div className="absolute left-0 right-0 top-full border-b border-black/10 bg-white shadow-xl">
-              <div className="mx-auto max-w-[1440px] px-5 py-7 md:px-8">
-                {categoriesLoading ? (
-                  <div className="py-8 text-center text-sm text-neutral-400">
-                    Loading categories...
-                  </div>
-                ) : categories.length === 0 ? (
-                  <div className="py-8 text-center text-sm text-neutral-400">
-                    No categories available.
-                  </div>
-                ) : (
-                  <div className="grid gap-x-8 gap-y-8 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-                    {categories.map(
-                      (category) => (
-                        <div
-                          key={category.id}
-                        >
-                          {/* Parent Category */}
-                          <Link
-                            href={`/shop?category=${category.slug}`}
-                            onClick={() =>
-                              setCategoryOpen(
-                                false
-                              )
-                            }
-                            className="flex items-center gap-2 text-sm font-bold transition hover:text-neutral-500"
-                          >
-                            {category.icon && (
-                              <span>
-                                {
-                                  category.icon
-                                }
-                              </span>
-                            )}
-
-                            <span>
-                              {category.name}
-                            </span>
-
-                            <span className="ml-auto text-xs text-neutral-300">
-                              →
-                            </span>
-                          </Link>
-
-                          {/* Child Categories */}
-                          {category.children &&
-                            category.children
-                              .length >
-                              0 && (
-                              <div className="mt-3 space-y-2 border-l border-black/10 pl-4">
-                                {category.children.map(
-                                  (
-                                    child
-                                  ) => (
-                                    <Link
-                                      key={
-                                        child.id
-                                      }
-                                      href={`/shop?category=${child.slug}`}
-                                      onClick={() =>
-                                        setCategoryOpen(
-                                          false
-                                        )
-                                      }
-                                      className="block text-sm text-neutral-500 transition hover:text-black"
-                                    >
-                                      {
-                                        child.name
-                                      }
-                                    </Link>
-                                  )
-                                )}
-                              </div>
-                            )}
-                        </div>
-                      )
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Hero */}
+      {/* HERO */}
       <section className="mx-auto max-w-[1440px] px-5 pt-6 md:px-8 md:pt-8">
         <div className="relative min-h-[560px] overflow-hidden rounded-[28px] bg-[#deded8]">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_40%,rgba(255,255,255,0.9),transparent_38%),linear-gradient(135deg,#d7d7d1,#ededeb)]" />
@@ -468,12 +476,15 @@ export default function HomePage() {
                   Shop Collection →
                 </Link>
 
-                <a
-                  href="#categories"
+                <button
+                  type="button"
+                  onClick={() =>
+                    setCategoryOpen(true)
+                  }
                   className="rounded-full border border-black/20 bg-white/60 px-7 py-3.5 text-sm font-semibold backdrop-blur transition hover:bg-white"
                 >
                   Explore Categories
-                </a>
+                </button>
               </div>
             </div>
 
@@ -496,7 +507,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Trust Bar */}
+      {/* TRUST BAR */}
       <section className="mx-auto max-w-[1440px] px-5 py-8 md:px-8">
         <div className="grid overflow-hidden rounded-2xl border border-black/10 bg-white md:grid-cols-4">
           {[
@@ -521,11 +532,7 @@ export default function HomePage() {
               "Safe & reliable checkout",
             ],
           ].map(
-            ([
-              number,
-              title,
-              subtitle,
-            ]) => (
+            ([number, title, subtitle]) => (
               <div
                 key={number}
                 className="border-b border-black/10 p-6 last:border-b-0 md:border-b-0 md:border-r md:last:border-r-0"
@@ -547,7 +554,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Categories */}
+      {/* CATEGORIES */}
       <section
         id="categories"
         className="mx-auto max-w-[1440px] px-5 py-14 md:px-8 md:py-20"
@@ -583,55 +590,60 @@ export default function HomePage() {
           </div>
         ) : (
           <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-            {categories.map(
-              (category, index) => (
-                <Link
-                  key={category.id}
-                  href={`/shop?category=${category.slug}`}
-                  className="group relative min-h-[270px] overflow-hidden rounded-2xl bg-white p-7 transition hover:-translate-y-1"
-                >
-                  <div className="absolute right-[-40px] top-[-40px] h-40 w-40 rounded-full bg-[#f0f0eb] transition group-hover:scale-125" />
+            {categories
+              .slice(0, 8)
+              .map(
+                (category, index) => (
+                  <Link
+                    key={category.id}
+                    href={`/shop?category=${encodeURIComponent(
+                      category.slug
+                    )}`}
+                    className="group relative min-h-[270px] overflow-hidden rounded-2xl bg-white p-7 transition hover:-translate-y-1"
+                  >
+                    <div className="absolute right-[-40px] top-[-40px] h-40 w-40 rounded-full bg-[#f0f0eb] transition group-hover:scale-125" />
 
-                  <div className="relative flex h-full flex-col justify-between">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-black text-xl text-white">
-                      {category.icon ||
-                        "✦"}
-                    </div>
+                    <div className="relative flex h-full flex-col justify-between">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-black text-xl text-white">
+                        {category.icon ||
+                          "✦"}
+                      </div>
 
-                    <div>
-                      <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">
-                        {String(
-                          index + 1
-                        ).padStart(2, "0")}
-                      </p>
-
-                      <h3 className="mt-2 text-2xl font-bold tracking-tight">
-                        {
-                          category.name
-                        }
-                      </h3>
-
-                      {category.subtitle && (
-                        <p className="mt-2 max-w-[220px] text-sm leading-6 text-neutral-500">
-                          {
-                            category.subtitle
-                          }
+                      <div>
+                        <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">
+                          {String(
+                            index + 1
+                          ).padStart(
+                            2,
+                            "0"
+                          )}
                         </p>
-                      )}
 
-                      <span className="mt-5 inline-block text-sm font-semibold">
-                        Explore →
-                      </span>
+                        <h3 className="mt-2 text-2xl font-bold tracking-tight">
+                          {category.name}
+                        </h3>
+
+                        {category.subtitle && (
+                          <p className="mt-2 max-w-[220px] text-sm leading-6 text-neutral-500">
+                            {
+                              category.subtitle
+                            }
+                          </p>
+                        )}
+
+                        <span className="mt-5 inline-block text-sm font-semibold">
+                          Explore →
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                </Link>
-              )
-            )}
+                  </Link>
+                )
+              )}
           </div>
         )}
       </section>
 
-      {/* Products */}
+      {/* PRODUCTS */}
       <section className="bg-white">
         <div className="mx-auto max-w-[1440px] px-5 py-14 md:px-8 md:py-20">
           <div className="mb-8 flex items-end justify-between">
@@ -664,7 +676,8 @@ export default function HomePage() {
                 )
               )}
             </div>
-          ) : products.length === 0 ? (
+          ) : featuredProducts.length ===
+            0 ? (
             <div className="rounded-2xl border border-black/10 bg-[#f5f5f2] p-12 text-center">
               <p className="text-sm text-neutral-500">
                 No products available yet.
@@ -679,8 +692,9 @@ export default function HomePage() {
             </div>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {products.map(
-                (product) => (
+              {featuredProducts
+                .slice(0, 8)
+                .map((product) => (
                   <Link
                     key={product.id}
                     href={`/products/${product.slug}`}
@@ -689,13 +703,17 @@ export default function HomePage() {
                     <div className="relative aspect-square overflow-hidden rounded-2xl bg-[#f0f0ec]">
                       {product.badge && (
                         <span className="absolute left-4 top-4 z-10 rounded-full bg-black px-3 py-1.5 text-[9px] font-bold tracking-wider text-white">
-                          {product.badge}
+                          {
+                            product.badge
+                          }
                         </span>
                       )}
 
                       {product.image ? (
                         <img
-                          src={product.image}
+                          src={
+                            product.image
+                          }
                           alt={
                             product.name
                           }
@@ -714,24 +732,21 @@ export default function HomePage() {
 
                     <div className="pt-4">
                       <p className="text-xs text-neutral-400">
-                        {
-                          product
-                            .category
-                            ?.name ||
-                          "General"
-                        }
+                        {product.category
+                          ?.name ||
+                          "General"}
                       </p>
 
                       <h3 className="mt-1 font-semibold">
-                        {
-                          product.name
-                        }
+                        {product.name}
                       </h3>
 
                       <div className="mt-2 flex items-center gap-2">
                         <span className="font-bold">
                           ৳
-                          {product.price.toLocaleString(
+                          {Number(
+                            product.price
+                          ).toLocaleString(
                             "en-BD"
                           )}
                         </span>
@@ -740,7 +755,9 @@ export default function HomePage() {
                           null && (
                           <span className="text-sm text-neutral-400 line-through">
                             ৳
-                            {product.oldPrice.toLocaleString(
+                            {Number(
+                              product.oldPrice
+                            ).toLocaleString(
                               "en-BD"
                             )}
                           </span>
@@ -748,14 +765,13 @@ export default function HomePage() {
                       </div>
                     </div>
                   </Link>
-                )
-              )}
+                ))}
             </div>
           )}
         </div>
       </section>
 
-      {/* Editorial Banner */}
+      {/* EDITORIAL */}
       <section className="mx-auto max-w-[1440px] px-5 py-14 md:px-8 md:py-20">
         <div className="relative overflow-hidden rounded-[28px] bg-black px-7 py-16 text-white md:px-16 md:py-24">
           <div className="absolute right-[-100px] top-[-120px] h-[400px] w-[400px] rounded-full border border-white/10" />
@@ -777,7 +793,8 @@ export default function HomePage() {
               We believe online shopping
               should feel simple. No endless
               scrolling. No confusing choices.
-              Just products worth bringing home.
+              Just products worth bringing
+              home.
             </p>
 
             <Link
@@ -790,7 +807,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Newsletter */}
+      {/* NEWSLETTER */}
       <section className="border-t border-black/10">
         <div className="mx-auto max-w-[1440px] px-5 py-16 md:px-8 md:py-20">
           <div className="mx-auto max-w-2xl text-center">
@@ -803,8 +820,9 @@ export default function HomePage() {
             </h2>
 
             <p className="mt-4 text-sm leading-6 text-neutral-500">
-              New products, exclusive offers and
-              useful things. No spam. Promise.
+              New products, exclusive offers
+              and useful things. No spam.
+              Promise.
             </p>
 
             <div className="mx-auto mt-7 flex max-w-md gap-2">
@@ -825,7 +843,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Footer */}
+      {/* FOOTER */}
       <footer className="bg-black text-white">
         <div className="mx-auto max-w-[1440px] px-5 py-12 md:px-8">
           <div className="grid gap-10 md:grid-cols-4">
@@ -857,18 +875,28 @@ export default function HomePage() {
                   All Products
                 </Link>
 
-                <a
-                  href="#categories"
+                <button
+                  type="button"
+                  onClick={() =>
+                    setCategoryOpen(true)
+                  }
                   className="block hover:text-white"
                 >
                   Categories
-                </a>
+                </button>
 
                 <Link
                   href="/new-arrivals"
                   className="block hover:text-white"
                 >
                   New Arrivals
+                </Link>
+
+                <Link
+                  href="/flash-deals"
+                  className="block hover:text-white"
+                >
+                  Flash Deals
                 </Link>
               </div>
             </div>
@@ -899,13 +927,21 @@ export default function HomePage() {
                 >
                   Returns
                 </Link>
+
+                <Link
+                  href="/track-order"
+                  className="block hover:text-white"
+                >
+                  Track Order
+                </Link>
               </div>
             </div>
           </div>
 
           <div className="mt-12 flex flex-col justify-between gap-3 border-t border-white/10 pt-6 text-xs text-white/30 md:flex-row">
             <p>
-              © 2026 Digital Shop. All rights reserved.
+              © 2026 Digital Shop. All rights
+              reserved.
             </p>
 
             <p>Digitalshop.com.bd</p>
