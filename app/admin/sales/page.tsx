@@ -18,6 +18,41 @@ type Sale = {
   }[];
 };
 
+function getStatusClass(status: string) {
+  switch (status) {
+    case "DELIVERED":
+      return "bg-emerald-50 text-emerald-700";
+
+    case "CANCELLED":
+      return "bg-red-50 text-red-700";
+
+    case "SHIPPED":
+      return "bg-blue-50 text-blue-700";
+
+    case "PROCESSING":
+      return "bg-indigo-50 text-indigo-700";
+
+    default:
+      return "bg-amber-50 text-amber-700";
+  }
+}
+
+function getPaymentClass(status: string) {
+  switch (status) {
+    case "PAID":
+      return "bg-emerald-50 text-emerald-700";
+
+    case "FAILED":
+      return "bg-red-50 text-red-700";
+
+    case "REFUNDED":
+      return "bg-purple-50 text-purple-700";
+
+    default:
+      return "bg-amber-50 text-amber-700";
+  }
+}
+
 export default function SalesPage() {
   const [sales, setSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
@@ -166,7 +201,7 @@ export default function SalesPage() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[900px] text-left">
+              <table className="w-full min-w-[1100px] text-left">
                 <thead className="border-b border-slate-200 bg-slate-50">
                   <tr>
                     <th className="px-5 py-4 text-xs font-bold uppercase tracking-wider text-slate-400">
@@ -192,6 +227,10 @@ export default function SalesPage() {
                     <th className="px-5 py-4 text-xs font-bold uppercase tracking-wider text-slate-400">
                       Status
                     </th>
+
+                    <th className="px-5 py-4 text-right text-xs font-bold uppercase tracking-wider text-slate-400">
+                      Action
+                    </th>
                   </tr>
                 </thead>
 
@@ -202,9 +241,12 @@ export default function SalesPage() {
                       className="transition hover:bg-slate-50"
                     >
                       <td className="px-5 py-5">
-                        <p className="font-bold">
+                        <Link
+                          href={`/admin/sales/${sale.id}`}
+                          className="font-bold text-slate-950 hover:underline"
+                        >
                           #{sale.id}
-                        </p>
+                        </Link>
 
                         <p className="mt-1 text-xs text-slate-400">
                           {new Date(
@@ -239,15 +281,45 @@ export default function SalesPage() {
                       </td>
 
                       <td className="px-5 py-5">
-                        <span className="text-xs font-bold text-slate-600">
-                          {sale.paymentMethod}
+                        <span
+                          className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${getPaymentClass(
+                            sale.paymentStatus
+                          )}`}
+                        >
+                          {sale.paymentStatus}
                         </span>
+
+                        <p className="mt-1 text-xs font-medium text-slate-400">
+                          {sale.paymentMethod}
+                        </p>
                       </td>
 
                       <td className="px-5 py-5">
-                        <span className="inline-flex rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700">
+                        <span
+                          className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${getStatusClass(
+                            sale.orderStatus
+                          )}`}
+                        >
                           {sale.orderStatus}
                         </span>
+                      </td>
+
+                      <td className="px-5 py-5 text-right">
+                        <div className="flex justify-end gap-2">
+                          <Link
+                            href={`/admin/sales/${sale.id}`}
+                            className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold transition hover:border-slate-950"
+                          >
+                            View
+                          </Link>
+
+                          <Link
+                            href={`/admin/sales/${sale.id}/edit`}
+                            className="rounded-lg bg-slate-950 px-3 py-2 text-xs font-bold text-white transition hover:bg-slate-800"
+                          >
+                            Edit
+                          </Link>
+                        </div>
                       </td>
                     </tr>
                   ))}
