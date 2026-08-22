@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type Category = {
   id: number;
@@ -42,6 +42,9 @@ export default function HomePage() {
   const [productsLoading, setProductsLoading] =
     useState(true);
 
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+
   useEffect(() => {
     async function loadCategories() {
       try {
@@ -55,7 +58,10 @@ export default function HomePage() {
 
         const result = await response.json();
 
-        if (result.success && Array.isArray(result.categories)) {
+        if (
+          result.success &&
+          Array.isArray(result.categories)
+        ) {
           setCategories(result.categories);
         }
       } catch (error) {
@@ -81,7 +87,10 @@ export default function HomePage() {
 
         const result = await response.json();
 
-        if (result.success && Array.isArray(result.products)) {
+        if (
+          result.success &&
+          Array.isArray(result.products)
+        ) {
           setProducts(result.products);
         }
       } catch (error) {
@@ -94,8 +103,255 @@ export default function HomePage() {
     loadProducts();
   }, []);
 
+  useEffect(() => {
+    if (!searchOpen) {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setSearchOpen(false);
+        setSearchQuery("");
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener(
+        "keydown",
+        handleKeyDown
+      );
+    };
+  }, [searchOpen]);
+
+  const searchResults = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+
+    if (!query) {
+      return [];
+    }
+
+    return products
+      .filter((product) => {
+        const name =
+          product.name?.toLowerCase() || "";
+
+        const category =
+          product.category?.name?.toLowerCase() || "";
+
+        const description =
+          product.description?.toLowerCase() || "";
+
+        const slug =
+          product.slug?.toLowerCase() || "";
+
+        return (
+          name.includes(query) ||
+          category.includes(query) ||
+          description.includes(query) ||
+          slug.includes(query)
+        );
+      })
+      .slice(0, 8);
+  }, [products, searchQuery]);
+
+  const handleSearchSubmit = (
+    event: React.FormEvent<HTMLFormElement>
+  ) => {
+    event.preventDefault();
+
+    const query = searchQuery.trim();
+
+    if (!query) {
+      return;
+    }
+
+    if (searchResults.length > 0) {
+      window.location.href = `/products/${searchResults[0].slug}`;
+      return;
+    }
+
+    window.location.href = `/shop?search=${encodeURIComponent(
+      query
+    )}`;
+  };
+
+  const totalRevenue = 0;
+
   return (
     <main className="min-h-screen bg-[#f5f5f2] text-[#111111]">
+      {/* Search Overlay */}
+      {searchOpen && (
+        <div
+          className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-sm"
+          onMouseDown={() => {
+            setSearchOpen(false);
+            setSearchQuery("");
+          }}
+        >
+          <div
+            className="mx-auto mt-5 w-[calc(100%-24px)] max-w-3xl"
+            onMouseDown={(event) =>
+              event.stopPropagation()
+            }
+          >
+            <div className="overflow-hidden rounded-2xl border border-black/10 bg-white shadow-2xl">
+              <form
+                onSubmit={handleSearchSubmit}
+                className="flex items-center gap-3 border-b border-black/10 px-5 py-4"
+              >
+                <span className="text-xl text-neutral-400">
+                  ⌕
+                </span>
+
+                <input
+                  autoFocus
+                  type="search"
+                  value={searchQuery}
+                  onChange={(event) =>
+                    setSearchQuery(event.target.value)
+                  }
+                  placeholder="Search products..."
+                  className="min-w-0 flex-1 bg-transparent text-base font-medium outline-none placeholder:text-neutral-400"
+                />
+
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery("")}
+                    className="flex h-8 w-8 items-center justify-center rounded-full text-neutral-400 hover:bg-neutral-100 hover:text-black"
+                    aria-label="Clear search"
+                  >
+                    ×
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchOpen(false);
+                    setSearchQuery("");
+                  }}
+                  className="rounded-lg bg-neutral-100 px-3 py-2 text-xs font-bold text-neutral-500 hover:bg-neutral-200 hover:text-black"
+                >
+                  ESC
+                </button>
+              </form>
+
+              {searchQuery.trim() && (
+                <div className="max-h-[70vh] overflow-y-auto">
+                  {productsLoading ? (
+                    <div className="px-5 py-8 text-center text-sm text-neutral-500">
+                      Searching products...
+                    </div>
+                  ) : searchResults.length === 0 ? (
+                    <div className="px-5 py-10 text-center">
+                      <div className="text-3xl">⌕</div>
+
+                      <p className="mt-3 font-semibold">
+                        No products found
+                      </p>
+
+                      <p className="mt-1 text-sm text-neutral-500">
+                        Try another product name or
+                        category.
+                      </p>
+
+                      <Link
+                        href={`/shop?search=${encodeURIComponent(
+                          searchQuery.trim()
+                        )}`}
+                        onClick={() => {
+                          setSearchOpen(false);
+                          setSearchQuery("");
+                        }}
+                        className="mt-5 inline-flex rounded-full bg-black px-5 py-2.5 text-sm font-semibold text-white"
+                      >
+                        Search in Shop →
+                      </Link>
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-black/5">
+                      {searchResults.map((product) => (
+                        <Link
+                          key={product.id}
+                          href={`/products/${product.slug}`}
+                          onClick={() => {
+                            setSearchOpen(false);
+                            setSearchQuery("");
+                          }}
+                          className="flex items-center gap-4 px-5 py-4 transition hover:bg-neutral-50"
+                        >
+                          <div className="h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-[#f0f0ec]">
+                            {product.image ? (
+                              <img
+                                src={product.image}
+                                alt={product.name}
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center text-xl font-black">
+                                D
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate font-semibold">
+                              {product.name}
+                            </p>
+
+                            <p className="mt-1 text-xs text-neutral-400">
+                              {product.category?.name ||
+                                "General"}
+                            </p>
+                          </div>
+
+                          <div className="shrink-0 text-right">
+                            <p className="font-bold">
+                              ৳
+                              {Number(
+                                product.price
+                              ).toLocaleString(
+                                "en-BD"
+                              )}
+                            </p>
+
+                            {product.stock <= 0 && (
+                              <p className="mt-1 text-[10px] font-bold text-red-500">
+                                Out of Stock
+                              </p>
+                            )}
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+
+                  {searchResults.length > 0 && (
+                    <div className="border-t border-black/10 bg-neutral-50 px-5 py-3 text-center">
+                      <Link
+                        href={`/shop?search=${encodeURIComponent(
+                          searchQuery.trim()
+                        )}`}
+                        onClick={() => {
+                          setSearchOpen(false);
+                          setSearchQuery("");
+                        }}
+                        className="text-sm font-semibold underline underline-offset-4"
+                      >
+                        View all search results →
+                      </Link>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Announcement */}
       <div className="bg-black px-4 py-2 text-center text-[11px] font-medium tracking-[0.18em] text-white">
         FREE DELIVERY ON ORDERS OVER ৳2,000
@@ -108,7 +364,8 @@ export default function HomePage() {
             href="/"
             className="text-[28px] font-black tracking-[-0.08em]"
           >
-            Digital Shop<span className="text-neutral-400">.</span>
+            Digital Shop
+            <span className="text-neutral-400">.</span>
           </Link>
 
           <nav className="hidden items-center gap-8 md:flex">
@@ -135,10 +392,15 @@ export default function HomePage() {
           </nav>
 
           <div className="flex items-center gap-3">
+            {/* SEARCH BUTTON */}
             <button
               type="button"
               aria-label="Search"
-              className="flex h-10 w-10 items-center justify-center rounded-full border border-black/10 bg-white hover:bg-black hover:text-white"
+              onClick={() => {
+                setSearchOpen(true);
+                setSearchQuery("");
+              }}
+              className="flex h-10 w-10 items-center justify-center rounded-full border border-black/10 bg-white text-lg transition hover:bg-black hover:text-white"
             >
               ⌕
             </button>
@@ -157,6 +419,7 @@ export default function HomePage() {
               className="relative flex h-10 w-10 items-center justify-center rounded-full border border-black/10 bg-white hover:bg-black hover:text-white"
             >
               ♡
+
               <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-black px-1 text-[9px] text-white">
                 0
               </span>
@@ -424,7 +687,10 @@ export default function HomePage() {
 
                       {product.oldPrice !== null && (
                         <span className="text-sm text-neutral-400 line-through">
-                          ৳{product.oldPrice.toLocaleString("en-BD")}
+                          ৳
+                          {product.oldPrice.toLocaleString(
+                            "en-BD"
+                          )}
                         </span>
                       )}
                     </div>
@@ -511,7 +777,8 @@ export default function HomePage() {
           <div className="grid gap-10 md:grid-cols-4">
             <div className="md:col-span-2">
               <div className="text-3xl font-black tracking-[-0.08em]">
-                Digital Shop<span className="text-neutral-500">.</span>
+                Digital Shop
+                <span className="text-neutral-500">.</span>
               </div>
 
               <p className="mt-4 max-w-sm text-sm leading-6 text-white/50">
@@ -580,7 +847,9 @@ export default function HomePage() {
           </div>
 
           <div className="mt-12 flex flex-col justify-between gap-3 border-t border-white/10 pt-6 text-xs text-white/30 md:flex-row">
-            <p>© 2026 Digital Shop. All rights reserved.</p>
+            <p>
+              © 2026 Digital Shop. All rights reserved.
+            </p>
 
             <p>Digitalshop.com.bd</p>
           </div>
