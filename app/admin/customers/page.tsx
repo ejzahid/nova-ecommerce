@@ -125,20 +125,20 @@ export default async function CustomersPage() {
                       className="border-b border-slate-100 last:border-0 hover:bg-slate-50"
                     >
                       <td className="px-6 py-5">
-                        <Link
-                          href={`/admin/customers/${customer.id}`}
-                          className="block"
-                        >
-                          <p className="font-bold text-slate-950 hover:underline">
+                        <div>
+                          <Link
+                            href={`/admin/customers/${customer.id}`}
+                            className="font-bold text-slate-950 hover:underline"
+                          >
                             {customer.name}
-                          </p>
+                          </Link>
 
                           {customer.email && (
                             <p className="mt-1 text-sm text-slate-500">
                               {customer.email}
                             </p>
                           )}
-                        </Link>
+                        </div>
                       </td>
 
                       <td className="px-6 py-5">
@@ -166,9 +166,9 @@ export default async function CustomersPage() {
                       <td className="px-6 py-5 text-right">
                         <Link
                           href={`/admin/customers/${customer.id}`}
-                          className="inline-flex rounded-xl bg-slate-950 px-4 py-2 text-sm font-bold text-white transition hover:bg-slate-800"
+                          className="inline-flex rounded-lg bg-slate-950 px-4 py-2 text-sm font-bold text-white transition hover:bg-slate-800"
                         >
-                          View Details
+                          View
                         </Link>
                       </td>
                     </tr>
