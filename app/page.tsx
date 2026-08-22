@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 type Category = {
   id: number;
@@ -42,6 +42,7 @@ export default function HomePage() {
   const [productsLoading, setProductsLoading] =
     useState(true);
 
+  const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
@@ -61,10 +62,18 @@ export default function HomePage() {
           result.success &&
           Array.isArray(result.categories)
         ) {
-          setCategories(result.categories);
+          setCategories(
+            result.categories.filter(
+              (category: Category) =>
+                category.isActive !== false
+            )
+          );
         }
       } catch (error) {
-        console.error("Category loading error:", error);
+        console.error(
+          "Category loading error:",
+          error
+        );
       } finally {
         setCategoriesLoading(false);
       }
@@ -93,7 +102,10 @@ export default function HomePage() {
           setProducts(result.products);
         }
       } catch (error) {
-        console.error("Product loading error:", error);
+        console.error(
+          "Product loading error:",
+          error
+        );
       } finally {
         setProductsLoading(false);
       }
@@ -102,52 +114,28 @@ export default function HomePage() {
     loadProducts();
   }, []);
 
-  const searchResults = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
+  const normalizedSearch =
+    searchQuery.trim().toLowerCase();
 
-    if (!query) {
-      return [];
-    }
+  const searchResults =
+    normalizedSearch.length > 0
+      ? products.filter((product) => {
+          const name =
+            product.name?.toLowerCase() || "";
 
-    return products
-      .filter((product) => {
-        const name =
-          product.name?.toLowerCase() || "";
+          const category =
+            product.category?.name?.toLowerCase() || "";
 
-        const category =
-          product.category?.name?.toLowerCase() || "";
+          const description =
+            product.description?.toLowerCase() || "";
 
-        const description =
-          product.description?.toLowerCase() || "";
-
-        const slug =
-          product.slug?.toLowerCase() || "";
-
-        return (
-          name.includes(query) ||
-          category.includes(query) ||
-          description.includes(query) ||
-          slug.includes(query)
-        );
-      })
-      .slice(0, 6);
-  }, [products, searchQuery]);
-
-  const handleSearch = (
-    event: React.FormEvent<HTMLFormElement>
-  ) => {
-    event.preventDefault();
-
-    const query = searchQuery.trim();
-
-    if (!query) {
-      return;
-    }
-
-    window.location.href = `/shop?search=${encodeURIComponent(
-      query
-    )}`;
-  };
+          return (
+            name.includes(normalizedSearch) ||
+            category.includes(normalizedSearch) ||
+            description.includes(normalizedSearch)
+          );
+        })
+      : [];
 
   return (
     <main className="min-h-screen bg-[#f5f5f2] text-[#111111]">
@@ -158,7 +146,8 @@ export default function HomePage() {
 
       {/* Header */}
       <header className="sticky top-0 z-50 border-b border-black/10 bg-[#f5f5f2]/95 backdrop-blur">
-        <div className="mx-auto flex h-[76px] max-w-[1440px] items-center gap-6 px-5 md:px-8">
+        {/* Main Header */}
+        <div className="mx-auto flex h-[76px] max-w-[1440px] items-center justify-between gap-5 px-5 md:px-8">
           {/* Logo */}
           <Link
             href="/"
@@ -168,8 +157,8 @@ export default function HomePage() {
             <span className="text-neutral-400">.</span>
           </Link>
 
-          {/* Navigation */}
-          <nav className="hidden shrink-0 items-center gap-7 lg:flex">
+          {/* Main Navigation */}
+          <nav className="hidden items-center gap-8 lg:flex">
             <Link
               href="/"
               className="text-sm font-medium hover:opacity-50"
@@ -192,155 +181,38 @@ export default function HomePage() {
             </Link>
           </nav>
 
-          {/* Header Search */}
-          <div className="ml-auto flex min-w-0 flex-1 justify-end">
-            <form
-              onSubmit={handleSearch}
-              className="relative w-full max-w-[430px]"
+          {/* Right Actions */}
+          <div className="flex items-center gap-2">
+            {/* Search Button */}
+            <button
+              type="button"
+              aria-label="Search"
+              onClick={() =>
+                setSearchOpen((current) => !current)
+              }
+              className={`flex h-10 w-10 items-center justify-center rounded-full border border-black/10 bg-white text-lg transition ${
+                searchOpen
+                  ? "bg-black text-white"
+                  : "hover:bg-black hover:text-white"
+              }`}
             >
-              <div className="flex h-11 items-center rounded-full border border-black/10 bg-white transition focus-within:border-black">
-                <span className="ml-4 shrink-0 text-lg text-neutral-400">
-                  ⌕
-                </span>
+              ⌕
+            </button>
 
-                <input
-                  type="search"
-                  value={searchQuery}
-                  onChange={(event) =>
-                    setSearchQuery(event.target.value)
-                  }
-                  placeholder="Search products..."
-                  className="min-w-0 flex-1 bg-transparent px-3 text-sm outline-none placeholder:text-neutral-400"
-                />
-
-                {searchQuery && (
-                  <button
-                    type="button"
-                    onClick={() => setSearchQuery("")}
-                    aria-label="Clear search"
-                    className="mr-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-neutral-400 transition hover:bg-neutral-100 hover:text-black"
-                  >
-                    ×
-                  </button>
-                )}
-
-                <button
-                  type="submit"
-                  className="mr-1 rounded-full bg-black px-4 py-2 text-xs font-bold text-white transition hover:bg-neutral-800"
-                >
-                  Search
-                </button>
-              </div>
-
-              {/* Search Suggestions */}
-              {searchQuery.trim() && (
-                <div className="absolute left-0 right-0 top-[calc(100%+8px)] overflow-hidden rounded-2xl border border-black/10 bg-white shadow-xl">
-                  {productsLoading ? (
-                    <div className="px-5 py-6 text-center text-sm text-neutral-500">
-                      Searching...
-                    </div>
-                  ) : searchResults.length === 0 ? (
-                    <div className="px-5 py-7 text-center">
-                      <p className="font-semibold">
-                        No products found
-                      </p>
-
-                      <p className="mt-1 text-xs text-neutral-400">
-                        Try another product name or category.
-                      </p>
-
-                      <button
-                        type="submit"
-                        className="mt-4 text-xs font-bold underline underline-offset-4"
-                      >
-                        Search in Shop →
-                      </button>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="max-h-[390px] overflow-y-auto">
-                        {searchResults.map((product) => (
-                          <Link
-                            key={product.id}
-                            href={`/products/${product.slug}`}
-                            onClick={() =>
-                              setSearchQuery("")
-                            }
-                            className="flex items-center gap-3 border-b border-black/5 px-4 py-3 transition last:border-b-0 hover:bg-neutral-50"
-                          >
-                            {/* Product Image */}
-                            <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-[#f0f0ec]">
-                              {product.image ? (
-                                <img
-                                  src={product.image}
-                                  alt={product.name}
-                                  className="h-full w-full object-cover"
-                                />
-                              ) : (
-                                <div className="flex h-full w-full items-center justify-center text-lg font-black">
-                                  D
-                                </div>
-                              )}
-                            </div>
-
-                            {/* Product Info */}
-                            <div className="min-w-0 flex-1">
-                              <p className="truncate text-sm font-semibold">
-                                {product.name}
-                              </p>
-
-                              <p className="mt-0.5 truncate text-xs text-neutral-400">
-                                {product.category?.name ||
-                                  "General"}
-                              </p>
-                            </div>
-
-                            {/* Price */}
-                            <div className="shrink-0 text-right">
-                              <p className="text-sm font-bold">
-                                ৳
-                                {Number(
-                                  product.price
-                                ).toLocaleString("en-BD")}
-                              </p>
-
-                              {product.stock <= 0 && (
-                                <p className="mt-0.5 text-[9px] font-bold text-red-500">
-                                  OUT OF STOCK
-                                </p>
-                              )}
-                            </div>
-                          </Link>
-                        ))}
-                      </div>
-
-                      <button
-                        type="submit"
-                        className="w-full border-t border-black/10 bg-neutral-50 px-4 py-3 text-center text-xs font-bold transition hover:bg-neutral-100"
-                      >
-                        View all results →
-                      </button>
-                    </>
-                  )}
-                </div>
-              )}
-            </form>
-          </div>
-
-          {/* Account + Cart */}
-          <div className="flex shrink-0 items-center gap-3">
+            {/* Account */}
             <button
               type="button"
               aria-label="Account"
-              className="hidden h-10 w-10 items-center justify-center rounded-full border border-black/10 bg-white hover:bg-black hover:text-white sm:flex"
+              className="hidden h-10 w-10 items-center justify-center rounded-full border border-black/10 bg-white transition hover:bg-black hover:text-white sm:flex"
             >
               ◯
             </button>
 
+            {/* Cart */}
             <Link
               href="/cart"
               aria-label="Cart"
-              className="relative flex h-10 w-10 items-center justify-center rounded-full border border-black/10 bg-white hover:bg-black hover:text-white"
+              className="relative flex h-10 w-10 items-center justify-center rounded-full border border-black/10 bg-white transition hover:bg-black hover:text-white"
             >
               ♡
 
@@ -351,88 +223,145 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Mobile Search */}
-        <div className="border-t border-black/5 px-5 py-3 lg:hidden">
-          <form
-            onSubmit={handleSearch}
-            className="relative"
-          >
-            <div className="flex h-11 items-center rounded-full border border-black/10 bg-white">
-              <span className="ml-4 text-lg text-neutral-400">
-                ⌕
-              </span>
+        {/* Search Bar - Header-এর ভিতরেই */}
+        {searchOpen && (
+          <div className="border-t border-black/10 bg-white">
+            <div className="mx-auto max-w-[1440px] px-5 py-4 md:px-8">
+              <div className="relative">
+                <input
+                  autoFocus
+                  type="search"
+                  value={searchQuery}
+                  onChange={(event) =>
+                    setSearchQuery(event.target.value)
+                  }
+                  placeholder="Search products..."
+                  className="w-full rounded-2xl border border-black/10 bg-[#f5f5f2] px-5 py-4 pr-12 text-sm outline-none transition focus:border-black"
+                />
 
-              <input
-                type="search"
-                value={searchQuery}
-                onChange={(event) =>
-                  setSearchQuery(event.target.value)
-                }
-                placeholder="Search products..."
-                className="min-w-0 flex-1 bg-transparent px-3 text-sm outline-none placeholder:text-neutral-400"
-              />
-
-              <button
-                type="submit"
-                className="mr-1 rounded-full bg-black px-4 py-2 text-xs font-bold text-white"
-              >
-                Search
-              </button>
-            </div>
-
-            {searchQuery.trim() && (
-              <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-50 overflow-hidden rounded-2xl border border-black/10 bg-white shadow-xl">
-                {searchResults.length === 0 ? (
-                  <div className="px-5 py-6 text-center text-sm text-neutral-500">
-                    No products found.
-                  </div>
-                ) : (
-                  <div className="max-h-[350px] overflow-y-auto">
-                    {searchResults.map((product) => (
-                      <Link
-                        key={product.id}
-                        href={`/products/${product.slug}`}
-                        onClick={() => setSearchQuery("")}
-                        className="flex items-center gap-3 border-b border-black/5 px-4 py-3 last:border-b-0 hover:bg-neutral-50"
-                      >
-                        <div className="h-11 w-11 shrink-0 overflow-hidden rounded-lg bg-[#f0f0ec]">
-                          {product.image ? (
-                            <img
-                              src={product.image}
-                              alt={product.name}
-                              className="h-full w-full object-cover"
-                            />
-                          ) : (
-                            <div className="flex h-full w-full items-center justify-center font-black">
-                              D
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-semibold">
-                            {product.name}
-                          </p>
-
-                          <p className="text-xs text-neutral-400">
-                            {product.category?.name ||
-                              "General"}
-                          </p>
-                        </div>
-
-                        <p className="text-sm font-bold">
-                          ৳
-                          {Number(
-                            product.price
-                          ).toLocaleString("en-BD")}
-                        </p>
-                      </Link>
-                    ))}
-                  </div>
-                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery("");
+                    setSearchOpen(false);
+                  }}
+                  aria-label="Close search"
+                  className="absolute right-3 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full text-lg text-neutral-500 hover:bg-black hover:text-white"
+                >
+                  ×
+                </button>
               </div>
-            )}
-          </form>
+
+              {/* Search Results */}
+              {normalizedSearch.length > 0 && (
+                <div className="mt-3 overflow-hidden rounded-2xl border border-black/10 bg-[#f5f5f2]">
+                  {searchResults.length === 0 ? (
+                    <div className="px-5 py-8 text-center">
+                      <p className="text-sm font-semibold">
+                        No products found
+                      </p>
+
+                      <p className="mt-1 text-xs text-neutral-500">
+                        Try another product name or category.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="max-h-[360px] overflow-y-auto">
+                      {searchResults
+                        .slice(0, 8)
+                        .map((product) => (
+                          <Link
+                            key={product.id}
+                            href={`/products/${product.slug}`}
+                            onClick={() => {
+                              setSearchOpen(false);
+                              setSearchQuery("");
+                            }}
+                            className="flex items-center gap-4 border-b border-black/5 p-4 last:border-b-0 hover:bg-white"
+                          >
+                            <div className="h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-white">
+                              {product.image ? (
+                                <img
+                                  src={product.image}
+                                  alt={product.name}
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : (
+                                <div className="flex h-full w-full items-center justify-center text-xl font-black">
+                                  D
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-bold">
+                                {product.name}
+                              </p>
+
+                              <p className="mt-1 text-xs text-neutral-400">
+                                {product.category?.name ||
+                                  "General"}
+                              </p>
+                            </div>
+
+                            <p className="shrink-0 text-sm font-black">
+                              ৳
+                              {Number(
+                                product.price
+                              ).toLocaleString("en-BD")}
+                            </p>
+                          </Link>
+                        ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Category Navigation */}
+        <div className="border-t border-black/10 bg-white">
+          <div className="mx-auto max-w-[1440px] px-5 md:px-8">
+            <div className="flex h-[52px] items-center gap-6 overflow-x-auto scrollbar-hide">
+              <Link
+                href="/shop"
+                className="shrink-0 text-xs font-bold uppercase tracking-[0.12em] text-black hover:text-neutral-500"
+              >
+                All Products
+              </Link>
+
+              {categoriesLoading ? (
+                <>
+                  {[1, 2, 3, 4, 5].map(
+                    (item) => (
+                      <div
+                        key={item}
+                        className="h-4 w-20 shrink-0 animate-pulse rounded bg-neutral-200"
+                      />
+                    )
+                  )}
+                </>
+              ) : (
+                categories
+                  .slice()
+                  .sort(
+                    (a, b) =>
+                      a.sortOrder -
+                      b.sortOrder
+                  )
+                  .map((category) => (
+                    <Link
+                      key={category.id}
+                      href={`/shop?category=${category.slug}`}
+                      className="shrink-0 text-xs font-semibold text-neutral-500 transition hover:text-black"
+                    >
+                      {category.name}
+                    </Link>
+                  ))
+              )}
+            </div>
+          </div>
         </div>
       </header>
 
@@ -460,9 +389,10 @@ export default function HomePage() {
               </h1>
 
               <p className="mt-7 max-w-md text-base leading-7 text-neutral-600 md:text-lg">
-                Thoughtfully selected products for modern
-                Bangladesh. Simple design, useful technology,
-                and things you will actually love using.
+                Thoughtfully selected products for
+                modern Bangladesh. Simple design,
+                useful technology, and things you will
+                actually love using.
               </p>
 
               <div className="mt-9 flex flex-wrap gap-3">
@@ -505,28 +435,46 @@ export default function HomePage() {
       <section className="mx-auto max-w-[1440px] px-5 py-8 md:px-8">
         <div className="grid overflow-hidden rounded-2xl border border-black/10 bg-white md:grid-cols-4">
           {[
-            ["01", "Authentic Products", "100% genuine products"],
-            ["02", "Fast Delivery", "Across Bangladesh"],
-            ["03", "Easy Returns", "Simple return policy"],
-            ["04", "Secure Payment", "Safe & reliable checkout"],
-          ].map(([number, title, subtitle]) => (
-            <div
-              key={number}
-              className="border-b border-black/10 p-6 last:border-b-0 md:border-b-0 md:border-r md:last:border-r-0"
-            >
-              <p className="text-[10px] font-bold tracking-[0.2em] text-neutral-400">
-                {number}
-              </p>
+            [
+              "01",
+              "Authentic Products",
+              "100% genuine products",
+            ],
+            [
+              "02",
+              "Fast Delivery",
+              "Across Bangladesh",
+            ],
+            [
+              "03",
+              "Easy Returns",
+              "Simple return policy",
+            ],
+            [
+              "04",
+              "Secure Payment",
+              "Safe & reliable checkout",
+            ],
+          ].map(
+            ([number, title, subtitle]) => (
+              <div
+                key={number}
+                className="border-b border-black/10 p-6 last:border-b-0 md:border-b-0 md:border-r md:last:border-r-0"
+              >
+                <p className="text-[10px] font-bold tracking-[0.2em] text-neutral-400">
+                  {number}
+                </p>
 
-              <p className="mt-3 font-semibold">
-                {title}
-              </p>
+                <p className="mt-3 font-semibold">
+                  {title}
+                </p>
 
-              <p className="mt-1 text-xs text-neutral-500">
-                {subtitle}
-              </p>
-            </div>
-          ))}
+                <p className="mt-1 text-xs text-neutral-500">
+                  {subtitle}
+                </p>
+              </div>
+            )
+          )}
         </div>
       </section>
 
@@ -564,41 +512,45 @@ export default function HomePage() {
           </div>
         ) : (
           <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-            {categories.map((category, index) => (
-              <Link
-                key={category.id}
-                href={`/shop?category=${category.slug}`}
-                className="group relative min-h-[270px] overflow-hidden rounded-2xl bg-white p-7 transition hover:-translate-y-1"
-              >
-                <div className="absolute right-[-40px] top-[-40px] h-40 w-40 rounded-full bg-[#f0f0eb] transition group-hover:scale-125" />
+            {categories.map(
+              (category, index) => (
+                <Link
+                  key={category.id}
+                  href={`/shop?category=${category.slug}`}
+                  className="group relative min-h-[270px] overflow-hidden rounded-2xl bg-white p-7 transition hover:-translate-y-1"
+                >
+                  <div className="absolute right-[-40px] top-[-40px] h-40 w-40 rounded-full bg-[#f0f0eb] transition group-hover:scale-125" />
 
-                <div className="relative flex h-full flex-col justify-between">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-black text-xl text-white">
-                    {category.icon || "✦"}
-                  </div>
+                  <div className="relative flex h-full flex-col justify-between">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-black text-xl text-white">
+                      {category.icon || "✦"}
+                    </div>
 
-                  <div>
-                    <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">
-                      {String(index + 1).padStart(2, "0")}
-                    </p>
-
-                    <h3 className="mt-2 text-2xl font-bold tracking-tight">
-                      {category.name}
-                    </h3>
-
-                    {category.subtitle && (
-                      <p className="mt-2 max-w-[220px] text-sm leading-6 text-neutral-500">
-                        {category.subtitle}
+                    <div>
+                      <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">
+                        {String(
+                          index + 1
+                        ).padStart(2, "0")}
                       </p>
-                    )}
 
-                    <span className="mt-5 inline-block text-sm font-semibold">
-                      Explore →
-                    </span>
+                      <h3 className="mt-2 text-2xl font-bold tracking-tight">
+                        {category.name}
+                      </h3>
+
+                      {category.subtitle && (
+                        <p className="mt-2 max-w-[220px] text-sm leading-6 text-neutral-500">
+                          {category.subtitle}
+                        </p>
+                      )}
+
+                      <span className="mt-5 inline-block text-sm font-semibold">
+                        Explore →
+                      </span>
+                    </div>
                   </div>
-                </div>
-              </Link>
-            ))}
+                </Link>
+              )
+            )}
           </div>
         )}
       </section>
@@ -733,9 +685,9 @@ export default function HomePage() {
             </h2>
 
             <p className="mt-7 max-w-lg text-sm leading-7 text-white/60 md:text-base">
-              We believe online shopping should feel simple.
-              No endless scrolling. No confusing choices.
-              Just products worth bringing home.
+              We believe online shopping should feel
+              simple. No endless scrolling. No confusing
+              choices. Just products worth bringing home.
             </p>
 
             <Link
@@ -761,8 +713,8 @@ export default function HomePage() {
             </h2>
 
             <p className="mt-4 text-sm leading-6 text-neutral-500">
-              New products, exclusive offers and useful things.
-              No spam. Promise.
+              New products, exclusive offers and useful
+              things. No spam. Promise.
             </p>
 
             <div className="mx-auto mt-7 flex max-w-md gap-2">
@@ -790,12 +742,15 @@ export default function HomePage() {
             <div className="md:col-span-2">
               <div className="text-3xl font-black tracking-[-0.08em]">
                 Digital Shop
-                <span className="text-neutral-500">.</span>
+                <span className="text-neutral-500">
+                  .
+                </span>
               </div>
 
               <p className="mt-4 max-w-sm text-sm leading-6 text-white/50">
                 Modern products for modern living.
-                Carefully selected and delivered across Bangladesh.
+                Carefully selected and delivered across
+                Bangladesh.
               </p>
             </div>
 
