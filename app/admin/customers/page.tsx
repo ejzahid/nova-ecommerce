@@ -89,7 +89,7 @@ export default async function CustomersPage() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[800px]">
+              <table className="w-full min-w-[900px]">
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50 text-left">
                     <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500">
@@ -111,6 +111,10 @@ export default async function CustomersPage() {
                     <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500">
                       Joined
                     </th>
+
+                    <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider text-slate-500">
+                      Action
+                    </th>
                   </tr>
                 </thead>
 
@@ -118,11 +122,14 @@ export default async function CustomersPage() {
                   {customers.map((customer) => (
                     <tr
                       key={customer.id}
-                      className="border-b border-slate-100 last:border-0"
+                      className="border-b border-slate-100 last:border-0 hover:bg-slate-50"
                     >
                       <td className="px-6 py-5">
-                        <div>
-                          <p className="font-bold text-slate-950">
+                        <Link
+                          href={`/admin/customers/${customer.id}`}
+                          className="block"
+                        >
+                          <p className="font-bold text-slate-950 hover:underline">
                             {customer.name}
                           </p>
 
@@ -131,7 +138,7 @@ export default async function CustomersPage() {
                               {customer.email}
                             </p>
                           )}
-                        </div>
+                        </Link>
                       </td>
 
                       <td className="px-6 py-5">
@@ -154,6 +161,15 @@ export default async function CustomersPage() {
 
                       <td className="px-6 py-5 text-sm text-slate-500">
                         {customer.createdAt.toLocaleDateString("en-BD")}
+                      </td>
+
+                      <td className="px-6 py-5 text-right">
+                        <Link
+                          href={`/admin/customers/${customer.id}`}
+                          className="inline-flex rounded-xl bg-slate-950 px-4 py-2 text-sm font-bold text-white transition hover:bg-slate-800"
+                        >
+                          View Details
+                        </Link>
                       </td>
                     </tr>
                   ))}
