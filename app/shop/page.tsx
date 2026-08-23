@@ -60,19 +60,14 @@ function ShopPageContent() {
   const [categories, setCategories] = useState<Category[]>([]);
 
   const [loading, setLoading] = useState(true);
-  const [categoryLoading, setCategoryLoading] =
-    useState(true);
+  const [categoryLoading, setCategoryLoading] = useState(true);
 
-  const [selectedCategory, setSelectedCategory] =
-    useState("all");
+  const [selectedCategory, setSelectedCategory] = useState("all");
 
   const [search, setSearch] = useState("");
-  const [addedId, setAddedId] = useState<number | null>(
-    null
-  );
+  const [addedId, setAddedId] = useState<number | null>(null);
 
-  const [categoryOpen, setCategoryOpen] =
-    useState(false);
+  const [categoryOpen, setCategoryOpen] = useState(false);
 
   /*
    * Read search/category from URL.
@@ -90,6 +85,9 @@ function ShopPageContent() {
     setSelectedCategory(urlCategory);
   }, [searchParams]);
 
+  /*
+   * Load products
+   */
   useEffect(() => {
     async function loadProducts() {
       try {
@@ -124,6 +122,9 @@ function ShopPageContent() {
     loadProducts();
   }, []);
 
+  /*
+   * Load categories
+   */
   useEffect(() => {
     async function loadCategories() {
       try {
@@ -178,7 +179,7 @@ function ShopPageContent() {
   }, [categories]);
 
   /*
-   * Find selected category including children.
+   * Find selected category
    */
   const selectedCategoryObject = useMemo(() => {
     if (selectedCategory === "all") {
@@ -195,10 +196,6 @@ function ShopPageContent() {
 
   /*
    * Product filtering
-   *
-   * Parent category:
-   * show products belonging to that parent or
-   * any child category.
    */
   const filteredProducts = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -279,11 +276,7 @@ function ShopPageContent() {
         )}`
       );
     } else {
-      window.history.replaceState(
-        {},
-        "",
-        "/shop"
-      );
+      window.history.replaceState({}, "", "/shop");
     }
   }
 
@@ -315,16 +308,14 @@ function ShopPageContent() {
       {/* HEADER */}
       <header className="sticky top-0 z-50 border-b border-black/10 bg-[#f5f5f2]/95 backdrop-blur">
         <div className="mx-auto max-w-[1440px] px-5 md:px-8">
-          {/* Top row */}
+          {/* TOP ROW */}
           <div className="flex h-[76px] items-center justify-between">
             <Link
               href="/"
               className="text-[28px] font-black tracking-[-0.08em]"
             >
               Digital Shop
-              <span className="text-neutral-400">
-                .
-              </span>
+              <span className="text-neutral-400">.</span>
             </Link>
 
             <div className="flex items-center gap-3">
@@ -347,7 +338,7 @@ function ShopPageContent() {
                 </div>
               </div>
 
-              {/* MOBILE SEARCH */}
+              {/* MOBILE SEARCH BUTTON */}
               <button
                 type="button"
                 aria-label="Search"
@@ -487,17 +478,14 @@ function ShopPageContent() {
 
                   {categoryLoading ? (
                     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                      {[1, 2, 3, 4].map(
-                        (item) => (
-                          <div
-                            key={item}
-                            className="h-32 animate-pulse rounded-2xl bg-neutral-100"
-                          />
-                        )
-                      )}
+                      {[1, 2, 3, 4].map((item) => (
+                        <div
+                          key={item}
+                          className="h-32 animate-pulse rounded-2xl bg-neutral-100"
+                        />
+                      ))}
                     </div>
-                  ) : parentCategories.length ===
-                    0 ? (
+                  ) : parentCategories.length === 0 ? (
                     <div className="rounded-2xl bg-neutral-50 p-8 text-center">
                       <p className="text-sm text-neutral-500">
                         No categories available.
@@ -522,8 +510,7 @@ function ShopPageContent() {
                               className="group flex w-full items-center gap-3 text-left"
                             >
                               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-black text-sm text-white">
-                                {parent.icon ||
-                                  "✦"}
+                                {parent.icon || "✦"}
                               </span>
 
                               <span className="text-base font-bold group-hover:underline">
@@ -539,82 +526,71 @@ function ShopPageContent() {
                                   {[
                                     ...parent.children,
                                   ]
-                                    .sort(
-                                      (a, b) =>
-                                        a.name.localeCompare(
-                                          b.name
-                                        )
-                                    )
-                                    .map(
-                                      (
-                                        child
-                                      ) => (
-                                        <div
-                                          key={
-                                            child.id
-                                          }
-                                        >
-                                          <button
-                                            type="button"
-                                            onClick={() =>
-                                              handleCategoryChange(
-                                                child.slug
-                                              )
-                                            }
-                                            className="text-sm font-semibold text-neutral-700 hover:text-black hover:underline"
-                                          >
-                                            {
-                                              child.name
-                                            }
-                                          </button>
-
-                                          {/* CHILD CATEGORY */}
-                                          {child
-                                            .children &&
-                                            child
-                                              .children
-                                              .length >
-                                              0 && (
-                                              <div className="mt-2 space-y-1.5 border-l border-black/10 pl-3">
-                                                {[
-                                                  ...child.children,
-                                                ]
-                                                  .sort(
-                                                    (
-                                                      a,
-                                                      b
-                                                    ) =>
-                                                      a.name.localeCompare(
-                                                        b.name
-                                                      )
-                                                  )
-                                                  .map(
-                                                    (
-                                                      grandChild
-                                                    ) => (
-                                                      <button
-                                                        key={
-                                                          grandChild.id
-                                                        }
-                                                        type="button"
-                                                        onClick={() =>
-                                                          handleCategoryChange(
-                                                            grandChild.slug
-                                                          )
-                                                        }
-                                                        className="block text-left text-xs text-neutral-500 hover:text-black hover:underline"
-                                                      >
-                                                        {
-                                                          grandChild.name
-                                                        }
-                                                      </button>
-                                                    )
-                                                  )}
-                                              </div>
-                                            )}
-                                        </div>
+                                    .sort((a, b) =>
+                                      a.name.localeCompare(
+                                        b.name
                                       )
-                                    )}
+                                    )
+                                    .map((child) => (
+                                      <div
+                                        key={child.id}
+                                      >
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            handleCategoryChange(
+                                              child.slug
+                                            )
+                                          }
+                                          className="text-sm font-semibold text-neutral-700 hover:text-black hover:underline"
+                                        >
+                                          {child.name}
+                                        </button>
+
+                                        {/* CHILD CATEGORY */}
+                                        {child.children &&
+                                          child.children
+                                            .length >
+                                            0 && (
+                                            <div className="mt-2 space-y-1.5 border-l border-black/10 pl-3">
+                                              {[
+                                                ...child.children,
+                                              ]
+                                                .sort(
+                                                  (
+                                                    a,
+                                                    b
+                                                  ) =>
+                                                    a.name.localeCompare(
+                                                      b.name
+                                                    )
+                                                )
+                                                .map(
+                                                  (
+                                                    grandChild
+                                                  ) => (
+                                                    <button
+                                                      key={
+                                                        grandChild.id
+                                                      }
+                                                      type="button"
+                                                      onClick={() =>
+                                                        handleCategoryChange(
+                                                          grandChild.slug
+                                                        )
+                                                      }
+                                                      className="block text-left text-xs text-neutral-500 hover:text-black hover:underline"
+                                                    >
+                                                      {
+                                                        grandChild.name
+                                                      }
+                                                    </button>
+                                                  )
+                                                )}
+                                            </div>
+                                          )}
+                                      </div>
+                                    ))}
                                 </div>
                               )}
                           </div>
@@ -827,8 +803,7 @@ function ShopPageContent() {
                           {formatPrice(product.price)}
                         </span>
 
-                        {product.oldPrice !==
-                          null && (
+                        {product.oldPrice !== null && (
                           <span className="text-sm text-neutral-400 line-through">
                             {formatPrice(
                               product.oldPrice
@@ -877,39 +852,46 @@ function ShopPageContent() {
   );
 }
 
-function ShopPageFallback() {
-  return (
-    <main className="min-h-screen bg-[#f5f5f2] text-neutral-950">
-      <div className="mx-auto max-w-[1440px] px-5 py-20 md:px-8">
-        <div className="animate-pulse">
-          <div className="h-10 w-48 rounded bg-neutral-200" />
-          <div className="mt-6 h-4 w-72 rounded bg-neutral-200" />
-          <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {Array.from({ length: 8 }).map(
-              (_, index) => (
-                <div
-                  key={index}
-                  className="overflow-hidden rounded-3xl bg-white"
-                >
-                  <div className="aspect-square bg-neutral-100" />
-                  <div className="space-y-3 p-5">
-                    <div className="h-4 w-20 rounded bg-neutral-100" />
-                    <div className="h-5 w-3/4 rounded bg-neutral-100" />
-                    <div className="h-5 w-24 rounded bg-neutral-100" />
-                  </div>
-                </div>
-              )
-            )}
-          </div>
-        </div>
-      </div>
-    </main>
-  );
-}
-
+/*
+ * IMPORTANT:
+ * useSearchParams() is inside ShopPageContent,
+ * and ShopPageContent is wrapped with Suspense.
+ *
+ * This fixes the Next.js production/Vercel build error:
+ *
+ * "useSearchParams() should be wrapped in a suspense boundary"
+ */
 export default function ShopPage() {
   return (
-    <Suspense fallback={<ShopPageFallback />}>
+    <Suspense
+      fallback={
+        <main className="min-h-screen bg-[#f5f5f2] text-neutral-950">
+          <div className="mx-auto max-w-7xl px-6 py-20">
+            <div className="h-10 w-48 animate-pulse rounded bg-neutral-200" />
+            <div className="mt-8 h-16 w-3/4 animate-pulse rounded bg-neutral-200" />
+
+            <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {Array.from({ length: 8 }).map(
+                (_, index) => (
+                  <div
+                    key={index}
+                    className="overflow-hidden rounded-3xl border border-neutral-200 bg-white"
+                  >
+                    <div className="aspect-square animate-pulse bg-neutral-100" />
+
+                    <div className="space-y-3 p-5">
+                      <div className="h-3 w-20 animate-pulse rounded bg-neutral-100" />
+                      <div className="h-5 w-3/4 animate-pulse rounded bg-neutral-100" />
+                      <div className="h-5 w-24 animate-pulse rounded bg-neutral-100" />
+                    </div>
+                  </div>
+                )
+              )}
+            </div>
+          </div>
+        </main>
+      }
+    >
       <ShopPageContent />
     </Suspense>
   );
