@@ -34,7 +34,7 @@ type Product = {
   isFeatured: boolean;
 };
 
-function sortCategories(categories: Category[]) {
+function sortCategories(categories: Category[]): Category[] {
   return [...categories]
     .sort((a, b) =>
       a.name.localeCompare(b.name, undefined, {
@@ -73,19 +73,15 @@ export default function HomePage() {
       try {
         setCategoriesLoading(true);
 
-        const response = await fetch(
-          "/api/categories",
-          {
-            cache: "no-store",
-          }
-        );
+        const response = await fetch("/api/categories", {
+          cache: "no-store",
+        });
 
         const result = await response.json();
 
         if (!response.ok || !result.success) {
           throw new Error(
-            result.error ||
-              "Failed to load categories"
+            result.error || "Failed to load categories"
           );
         }
 
@@ -94,14 +90,9 @@ export default function HomePage() {
             ? result.categories
             : [];
 
-        setCategories(
-          sortCategories(loadedCategories)
-        );
+        setCategories(sortCategories(loadedCategories));
       } catch (error) {
-        console.error(
-          "Category loading error:",
-          error
-        );
+        console.error("Category loading error:", error);
       } finally {
         setCategoriesLoading(false);
       }
@@ -115,19 +106,15 @@ export default function HomePage() {
       try {
         setProductsLoading(true);
 
-        const response = await fetch(
-          "/api/products",
-          {
-            cache: "no-store",
-          }
-        );
+        const response = await fetch("/api/products", {
+          cache: "no-store",
+        });
 
         const result = await response.json();
 
         if (!response.ok || !result.success) {
           throw new Error(
-            result.error ||
-              "Failed to load products"
+            result.error || "Failed to load products"
           );
         }
 
@@ -135,10 +122,7 @@ export default function HomePage() {
           setProducts(result.products);
         }
       } catch (error) {
-        console.error(
-          "Product loading error:",
-          error
-        );
+        console.error("Product loading error:", error);
       } finally {
         setProductsLoading(false);
       }
@@ -192,9 +176,7 @@ export default function HomePage() {
             className="text-[28px] font-black tracking-[-0.08em]"
           >
             Digital Shop
-            <span className="text-neutral-400">
-              .
-            </span>
+            <span className="text-neutral-400">.</span>
           </Link>
 
           {/* Right Actions */}
@@ -252,9 +234,7 @@ export default function HomePage() {
                   type="search"
                   value={searchQuery}
                   onChange={(event) =>
-                    setSearchQuery(
-                      event.target.value
-                    )
+                    setSearchQuery(event.target.value)
                   }
                   placeholder="Search products..."
                   className="w-full rounded-full border border-black/10 bg-[#f5f5f2] px-5 py-4 pr-14 text-sm outline-none transition focus:border-black"
@@ -280,9 +260,7 @@ export default function HomePage() {
               <button
                 type="button"
                 onClick={() =>
-                  setCategoryOpen(
-                    (value) => !value
-                  )
+                  setCategoryOpen((value) => !value)
                 }
                 className={`flex h-14 items-center gap-2 text-sm font-bold transition ${
                   categoryOpen
@@ -294,9 +272,7 @@ export default function HomePage() {
 
                 <span
                   className={`text-xs transition-transform ${
-                    categoryOpen
-                      ? "rotate-180"
-                      : ""
+                    categoryOpen ? "rotate-180" : ""
                   }`}
                 >
                   ▾
@@ -354,14 +330,12 @@ export default function HomePage() {
             <div className="mx-auto max-h-[70vh] max-w-[1440px] overflow-y-auto px-5 py-8 md:px-8">
               {categoriesLoading ? (
                 <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-                  {[1, 2, 3, 4].map(
-                    (item) => (
-                      <div
-                        key={item}
-                        className="h-40 animate-pulse rounded-2xl bg-[#f5f5f2]"
-                      />
-                    )
-                  )}
+                  {[1, 2, 3, 4].map((item) => (
+                    <div
+                      key={item}
+                      className="h-40 animate-pulse rounded-2xl bg-[#f5f5f2]"
+                    />
+                  ))}
                 </div>
               ) : categories.length === 0 ? (
                 <div className="py-10 text-center">
@@ -371,65 +345,53 @@ export default function HomePage() {
                 </div>
               ) : (
                 <div className="grid gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-4">
-                  {categories.map(
-                    (category) => (
-                      <div key={category.id}>
-                        {/* Parent */}
-                        <Link
-                          href={`/shop?category=${encodeURIComponent(
-                            category.slug
-                          )}`}
-                          onClick={() =>
-                            setCategoryOpen(
-                              false
-                            )
-                          }
-                          className="group flex items-center gap-3"
-                        >
-                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-black text-white">
-                            {category.icon ||
-                              "✦"}
-                          </span>
+                  {categories.map((category) => (
+                    <div key={category.id}>
+                      {/* Parent */}
+                      <Link
+                        href={`/shop?category=${encodeURIComponent(
+                          category.slug
+                        )}`}
+                        onClick={() =>
+                          setCategoryOpen(false)
+                        }
+                        className="group flex items-center gap-3"
+                      >
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-black text-white">
+                          {category.icon || "✦"}
+                        </span>
 
-                          <span className="text-sm font-black transition group-hover:underline">
-                            {category.name}
-                          </span>
-                        </Link>
+                        <span className="text-sm font-black transition group-hover:underline">
+                          {category.name}
+                        </span>
+                      </Link>
 
-                        {/* Children */}
-                        {category.children &&
-                          category.children
-                            .length > 0 && (
-                            <div className="mt-4 ml-[52px] space-y-2">
-                              {category.children.map(
-                                (
-                                  child
-                                ) => (
-                                  <Link
-                                    key={
-                                      child.id
-                                    }
-                                    href={`/shop?category=${encodeURIComponent(
-                                      child.slug
-                                    )}`}
-                                    onClick={() =>
-                                      setCategoryOpen(
-                                        false
-                                      )
-                                    }
-                                    className="block text-xs text-neutral-500 transition hover:text-black hover:underline"
-                                  >
-                                    {
-                                      child.name
-                                    }
-                                  </Link>
-                                )
-                              )}
-                            </div>
-                          )}
-                      </div>
-                    )
-                  )}
+                      {/* Children */}
+                      {category.children &&
+                        category.children.length > 0 && (
+                          <div className="mt-4 ml-[52px] space-y-2">
+                            {category.children.map(
+                              (child) => (
+                                <Link
+                                  key={child.id}
+                                  href={`/shop?category=${encodeURIComponent(
+                                    child.slug
+                                  )}`}
+                                  onClick={() =>
+                                    setCategoryOpen(
+                                      false
+                                    )
+                                  }
+                                  className="block text-xs text-neutral-500 transition hover:text-black hover:underline"
+                                >
+                                  {child.name}
+                                </Link>
+                              )
+                            )}
+                          </div>
+                        )}
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
@@ -573,14 +535,12 @@ export default function HomePage() {
 
         {categoriesLoading ? (
           <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-            {[1, 2, 3, 4].map(
-              (item) => (
-                <div
-                  key={item}
-                  className="min-h-[270px] animate-pulse rounded-2xl bg-white"
-                />
-              )
-            )}
+            {[1, 2, 3, 4].map((item) => (
+              <div
+                key={item}
+                className="min-h-[270px] animate-pulse rounded-2xl bg-white"
+              />
+            ))}
           </div>
         ) : categories.length === 0 ? (
           <div className="rounded-2xl border border-black/10 bg-white p-10 text-center">
@@ -592,53 +552,43 @@ export default function HomePage() {
           <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
             {categories
               .slice(0, 8)
-              .map(
-                (category, index) => (
-                  <Link
-                    key={category.id}
-                    href={`/shop?category=${encodeURIComponent(
-                      category.slug
-                    )}`}
-                    className="group relative min-h-[270px] overflow-hidden rounded-2xl bg-white p-7 transition hover:-translate-y-1"
-                  >
-                    <div className="absolute right-[-40px] top-[-40px] h-40 w-40 rounded-full bg-[#f0f0eb] transition group-hover:scale-125" />
+              .map((category, index) => (
+                <Link
+                  key={category.id}
+                  href={`/shop?category=${encodeURIComponent(
+                    category.slug
+                  )}`}
+                  className="group relative min-h-[270px] overflow-hidden rounded-2xl bg-white p-7 transition hover:-translate-y-1"
+                >
+                  <div className="absolute right-[-40px] top-[-40px] h-40 w-40 rounded-full bg-[#f0f0eb] transition group-hover:scale-125" />
 
-                    <div className="relative flex h-full flex-col justify-between">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-black text-xl text-white">
-                        {category.icon ||
-                          "✦"}
-                      </div>
-
-                      <div>
-                        <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">
-                          {String(
-                            index + 1
-                          ).padStart(
-                            2,
-                            "0"
-                          )}
-                        </p>
-
-                        <h3 className="mt-2 text-2xl font-bold tracking-tight">
-                          {category.name}
-                        </h3>
-
-                        {category.subtitle && (
-                          <p className="mt-2 max-w-[220px] text-sm leading-6 text-neutral-500">
-                            {
-                              category.subtitle
-                            }
-                          </p>
-                        )}
-
-                        <span className="mt-5 inline-block text-sm font-semibold">
-                          Explore →
-                        </span>
-                      </div>
+                  <div className="relative flex h-full flex-col justify-between">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-black text-xl text-white">
+                      {category.icon || "✦"}
                     </div>
-                  </Link>
-                )
-              )}
+
+                    <div>
+                      <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">
+                        {String(index + 1).padStart(2, "0")}
+                      </p>
+
+                      <h3 className="mt-2 text-2xl font-bold tracking-tight">
+                        {category.name}
+                      </h3>
+
+                      {category.subtitle && (
+                        <p className="mt-2 max-w-[220px] text-sm leading-6 text-neutral-500">
+                          {category.subtitle}
+                        </p>
+                      )}
+
+                      <span className="mt-5 inline-block text-sm font-semibold">
+                        Explore →
+                      </span>
+                    </div>
+                  </div>
+                </Link>
+              ))}
           </div>
         )}
       </section>
@@ -667,17 +617,14 @@ export default function HomePage() {
 
           {productsLoading ? (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {[1, 2, 3, 4].map(
-                (item) => (
-                  <div
-                    key={item}
-                    className="aspect-square animate-pulse rounded-2xl bg-[#f0f0ec]"
-                  />
-                )
-              )}
+              {[1, 2, 3, 4].map((item) => (
+                <div
+                  key={item}
+                  className="aspect-square animate-pulse rounded-2xl bg-[#f0f0ec]"
+                />
+              ))}
             </div>
-          ) : featuredProducts.length ===
-            0 ? (
+          ) : featuredProducts.length === 0 ? (
             <div className="rounded-2xl border border-black/10 bg-[#f5f5f2] p-12 text-center">
               <p className="text-sm text-neutral-500">
                 No products available yet.
@@ -703,20 +650,14 @@ export default function HomePage() {
                     <div className="relative aspect-square overflow-hidden rounded-2xl bg-[#f0f0ec]">
                       {product.badge && (
                         <span className="absolute left-4 top-4 z-10 rounded-full bg-black px-3 py-1.5 text-[9px] font-bold tracking-wider text-white">
-                          {
-                            product.badge
-                          }
+                          {product.badge}
                         </span>
                       )}
 
                       {product.image ? (
                         <img
-                          src={
-                            product.image
-                          }
-                          alt={
-                            product.name
-                          }
+                          src={product.image}
+                          alt={product.name}
                           className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
                         />
                       ) : (
@@ -732,8 +673,7 @@ export default function HomePage() {
 
                     <div className="pt-4">
                       <p className="text-xs text-neutral-400">
-                        {product.category
-                          ?.name ||
+                        {product.category?.name ||
                           "General"}
                       </p>
 
@@ -746,20 +686,15 @@ export default function HomePage() {
                           ৳
                           {Number(
                             product.price
-                          ).toLocaleString(
-                            "en-BD"
-                          )}
+                          ).toLocaleString("en-BD")}
                         </span>
 
-                        {product.oldPrice !==
-                          null && (
+                        {product.oldPrice !== null && (
                           <span className="text-sm text-neutral-400 line-through">
                             ৳
                             {Number(
                               product.oldPrice
-                            ).toLocaleString(
-                              "en-BD"
-                            )}
+                            ).toLocaleString("en-BD")}
                           </span>
                         )}
                       </div>
@@ -850,9 +785,7 @@ export default function HomePage() {
             <div className="md:col-span-2">
               <div className="text-3xl font-black tracking-[-0.08em]">
                 Digital Shop
-                <span className="text-neutral-500">
-                  .
-                </span>
+                <span className="text-neutral-500">.</span>
               </div>
 
               <p className="mt-4 max-w-sm text-sm leading-6 text-white/50">
