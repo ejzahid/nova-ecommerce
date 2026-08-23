@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useCart } from "../cart/CartContext";
 
@@ -52,7 +52,7 @@ function formatPrice(value: number | string | null) {
   return `৳${numberValue.toLocaleString("en-BD")}`;
 }
 
-export default function ShopPage() {
+function ShopPageContent() {
   const { addToCart, cart } = useCart();
   const searchParams = useSearchParams();
 
@@ -105,7 +105,10 @@ export default function ShopPage() {
 
         const result = await response.json();
 
-        if (result.success && Array.isArray(result.products)) {
+        if (
+          result.success &&
+          Array.isArray(result.products)
+        ) {
           setProducts(result.products);
         } else {
           setProducts([]);
@@ -871,5 +874,43 @@ export default function ShopPage() {
         )}
       </section>
     </main>
+  );
+}
+
+function ShopPageFallback() {
+  return (
+    <main className="min-h-screen bg-[#f5f5f2] text-neutral-950">
+      <div className="mx-auto max-w-[1440px] px-5 py-20 md:px-8">
+        <div className="animate-pulse">
+          <div className="h-10 w-48 rounded bg-neutral-200" />
+          <div className="mt-6 h-4 w-72 rounded bg-neutral-200" />
+          <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            {Array.from({ length: 8 }).map(
+              (_, index) => (
+                <div
+                  key={index}
+                  className="overflow-hidden rounded-3xl bg-white"
+                >
+                  <div className="aspect-square bg-neutral-100" />
+                  <div className="space-y-3 p-5">
+                    <div className="h-4 w-20 rounded bg-neutral-100" />
+                    <div className="h-5 w-3/4 rounded bg-neutral-100" />
+                    <div className="h-5 w-24 rounded bg-neutral-100" />
+                  </div>
+                </div>
+              )
+            )}
+          </div>
+        </div>
+      </div>
+    </main>
+  );
+}
+
+export default function ShopPage() {
+  return (
+    <Suspense fallback={<ShopPageFallback />}>
+      <ShopPageContent />
+    </Suspense>
   );
 }
